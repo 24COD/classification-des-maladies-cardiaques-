@@ -7,6 +7,8 @@ Endpoint  : POST /predict/binary
 
 import requests
 import streamlit as st
+import pandas as pd
+import io
 
 # ---------------------------------------------------------------------------
 # 0. Configuration de la page
@@ -276,231 +278,440 @@ st.markdown(
 st.markdown('<hr class="styled-hr">', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# 5. Formulaire — 13 variables cliniques
+# Onglets pour Prédiction Individuelle vs Prédiction en Masse
 # ---------------------------------------------------------------------------
-with st.form("patient_form", clear_on_submit=False):
+tab1, tab2 = st.tabs(["🔍 Prédiction Individuelle", "📊 Prédiction en Masse"])
 
-    # ── Section 1 : Informations démographiques ──────────────────────
-    st.markdown(
-        '<div class="section-card">'
-        '<div class="section-title">📋 Informations démographiques</div>',
-        unsafe_allow_html=True,
-    )
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        age = st.number_input("Âge (années)", min_value=0, max_value=120, value=54, step=1)
-    with col2:
-        sex = st.selectbox("Sexe", options=[1, 0], format_func=lambda x: "Homme" if x == 1 else "Femme")
-    with col3:
-        cp = st.selectbox(
-            "Type de douleur thoracique (cp)",
-            options=[0, 1, 2, 3],
-            format_func=lambda x: {
-                0: "0 — Angine typique",
-                1: "1 — Angine atypique",
-                2: "2 — Douleur non angineuse",
-                3: "3 — Asymptomatique",
-            }[x],
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
+# ==== TAB 1 : PRÉDICTION INDIVIDUELLE ====
+with tab1:
+    # ---------------------------------------------------------------------------
+    # 5. Formulaire — 13 variables cliniques
+    # ---------------------------------------------------------------------------
+    with st.form("patient_form", clear_on_submit=False):
 
-    # ── Section 2 : Paramètres cardiovasculaires ─────────────────────
-    st.markdown(
-        '<div class="section-card">'
-        '<div class="section-title">💓 Paramètres cardiovasculaires</div>',
-        unsafe_allow_html=True,
-    )
-    col4, col5, col6 = st.columns(3)
-    with col4:
-        trestbps = st.number_input(
-            "Tension artérielle au repos (mm Hg)",
-            min_value=0.0, max_value=300.0, value=130.0, step=1.0,
-        )
-    with col5:
-        chol = st.number_input(
-            "Cholestérol sérique (mg/dl)",
-            min_value=0.0, max_value=700.0, value=246.0, step=1.0,
-        )
-    with col6:
-        thalach = st.number_input(
-            "Fréquence cardiaque max. (bpm)",
-            min_value=0.0, max_value=300.0, value=150.0, step=1.0,
-        )
-
-    col7, col8 = st.columns(2)
-    with col7:
-        fbs = st.selectbox(
-            "Glycémie à jeun > 120 mg/dl (fbs)",
-            options=[0, 1],
-            format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)",
-        )
-    with col8:
-        exang = st.selectbox(
-            "Angine induite par l'effort (exang)",
-            options=[0, 1],
-            format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)",
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── Section 3 : Données ECG & imagerie ───────────────────────────
-    st.markdown(
-        '<div class="section-card">'
-        '<div class="section-title">📈 Données ECG & Imagerie</div>',
-        unsafe_allow_html=True,
-    )
-    col9, col10, col11 = st.columns(3)
-    with col9:
-        restecg = st.selectbox(
-            "Résultats ECG au repos (restecg)",
-            options=[0, 1, 2],
-            format_func=lambda x: {
-                0: "0 — Normal",
-                1: "1 — Anomalie onde ST-T",
-                2: "2 — Hypertrophie ventriculaire gauche",
-            }[x],
-        )
-    with col10:
-        slope = st.selectbox(
-            "Pente du segment ST (slope)",
-            options=[0, 1, 2],
-            format_func=lambda x: {0: "0 — Montante", 1: "1 — Plate", 2: "2 — Descendante"}[x],
-        )
-    with col11:
-        ca = st.selectbox(
-            "Vaisseaux colorés par fluoroscopie (ca)",
-            options=[0, 1, 2, 3, 4],
-            format_func=lambda x: f"{x} vaisseau{'x' if x > 1 else ''}",
-        )
-
-    col12, col13 = st.columns(2)
-    with col12:
-        oldpeak = st.number_input(
-            "Dépression ST à l'effort (oldpeak)",
-            min_value=-10.0, max_value=10.0, value=0.0, step=0.1, format="%.1f",
-        )
-    with col13:
-        thal = st.selectbox(
-            "Thalassémie (thal)",
-            options=[3, 6, 7],
-            format_func=lambda x: {
-                3: "3 — Normal",
-                6: "6 — Défaut fixe",
-                7: "7 — Défaut réversible",
-            }[x],
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── Bouton de soumission ──────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
-    with col_btn2:
-        submitted = st.form_submit_button("🔬 Analyser", use_container_width=True)
-
-# ---------------------------------------------------------------------------
-# 6. Appel API & affichage des résultats
-# ---------------------------------------------------------------------------
-if submitted:
-    payload = {
-        "age":      float(age),
-        "sex":      float(sex),
-        "cp":       float(cp),
-        "trestbps": float(trestbps),
-        "chol":     float(chol),
-        "fbs":      float(fbs),
-        "restecg":  float(restecg),
-        "thalach":  float(thalach),
-        "exang":    float(exang),
-        "oldpeak":  float(oldpeak),
-        "slope":    float(slope),
-        "ca":       float(ca),
-        "thal":     float(thal),
-    }
-
-    with st.spinner("Analyse en cours via l'API…"):
-        try:
-            response = requests.post(
-                PREDICT_BINARY_URL,
-                json=payload,
-                timeout=30,
-            )
-            response.raise_for_status()
-            result = response.json()
-
-        except requests.exceptions.ConnectionError:
-            st.markdown(
-                '<div class="error-box">❌ <b>Impossible de joindre l\'API.</b> '
-                "Vérifiez que le serveur est en ligne et que l'URL est correcte.</div>",
-                unsafe_allow_html=True,
-            )
-            result = None
-        except requests.exceptions.Timeout:
-            st.markdown(
-                '<div class="error-box">⏱️ <b>Délai d\'attente dépassé.</b> '
-                "Le serveur met trop de temps à répondre (>30s). "
-                "Sur Render, le démarrage à froid peut prendre ~50s — veuillez réessayer.</div>",
-                unsafe_allow_html=True,
-            )
-            result = None
-        except requests.exceptions.HTTPError as e:
-            st.markdown(
-                f'<div class="error-box">⚠️ <b>Erreur HTTP {response.status_code}.</b> '
-                f"Détail : {response.text}</div>",
-                unsafe_allow_html=True,
-            )
-            result = None
-        except Exception as e:
-            st.markdown(
-                f'<div class="error-box">🚨 <b>Erreur inattendue :</b> {e}</div>',
-                unsafe_allow_html=True,
-            )
-            result = None
-
-    if result:
-        label      = result.get("prediction_label", "N/A")
-        prob       = result.get("probability_disease", 0.0)
-        pred_adj   = result.get("prediction_adjusted", 0)
-        thresh_adj = result.get("threshold_adjusted", 0.50)
-        is_disease = (label == "disease")
-
-        card_class  = "result-disease" if is_disease else "result-healthy"
-        badge_class = "badge-disease"  if is_disease else "badge-healthy"
-        icon        = "🔴" if is_disease else "🟢"
-        label_fr    = "MALADIE CARDIAQUE DÉTECTÉE" if is_disease else "AUCUNE MALADIE DÉTECTÉE"
-        desc        = (
-            "Le modèle identifie un <b>risque cardiovasculaire significatif</b> pour ce profil patient."
-            if is_disease else
-            "Le modèle n'identifie <b>pas de signal clinique alarmant</b> pour ce profil patient."
-        )
-
-        # Couleur de la barre de probabilité
-        prob_pct  = int(prob * 100)
-        bar_color = "#e74c3c" if prob > 0.6 else ("#f39c12" if prob > 0.4 else "#27ae60")
-        # Note : f39c12 est du jaune-doré (warn), mais uniquement dans la barre svg interne — pas du orange UI
-
+        # ── Section 1 : Informations démographiques ──────────────────────
         st.markdown(
-            f"""
-            <div class="result-card {card_class}">
-                <span class="result-badge {badge_class}">{icon} {label_fr}</span>
-                <h2 style="margin-bottom:0.2rem;">{prob_pct}% de probabilité de maladie</h2>
-                <p>{desc}</p>
-                <div class="prob-bar-bg">
-                    <div class="prob-bar-fill" style="width:{prob_pct}%; background:{bar_color};"></div>
-                </div>
-                <br>
-                <p>
-                    <b>Seuil par défaut (0.50) :</b> {'Malade' if result.get("prediction_code") == 1 else 'Sain'} &nbsp;|&nbsp;
-                    <b>Seuil ajusté ({thresh_adj}) :</b> {'Malade' if pred_adj == 1 else 'Sain'}
-                    <span style="font-size:0.75rem; opacity:0.7;"> (optimisé pour le rappel)</span>
-                </p>
-            </div>
-            """,
+            '<div class="section-card">'
+            '<div class="section-title">📋 Informations démographiques</div>',
             unsafe_allow_html=True,
         )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            age = st.number_input("Âge (années)", min_value=0, max_value=120, value=54, step=1)
+        with col2:
+            sex = st.selectbox("Sexe", options=[1, 0], format_func=lambda x: "Homme" if x == 1 else "Femme")
+        with col3:
+            cp = st.selectbox(
+                "Type de douleur thoracique (cp)",
+                options=[0, 1, 2, 3],
+                format_func=lambda x: {
+                    0: "0 — Angine typique",
+                    1: "1 — Angine atypique",
+                    2: "2 — Douleur non angineuse",
+                    3: "3 — Asymptomatique",
+                }[x],
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Détail JSON en expandeur discret
-        with st.expander("📄 Réponse JSON brute de l'API"):
-            st.json(result)
+        # ── Section 2 : Paramètres cardiovasculaires ─────────────────────
+        st.markdown(
+            '<div class="section-card">'
+            '<div class="section-title">💓 Paramètres cardiovasculaires</div>',
+            unsafe_allow_html=True,
+        )
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            trestbps = st.number_input(
+                "Tension artérielle au repos (mm Hg)",
+                min_value=0.0, max_value=300.0, value=130.0, step=1.0,
+            )
+        with col5:
+            chol = st.number_input(
+                "Cholestérol sérique (mg/dl)",
+                min_value=0.0, max_value=700.0, value=246.0, step=1.0,
+            )
+        with col6:
+            thalach = st.number_input(
+                "Fréquence cardiaque max. (bpm)",
+                min_value=0.0, max_value=300.0, value=150.0, step=1.0,
+            )
 
-        # Résumé du payload envoyé
-        with st.expander("📤 Données envoyées à l'API"):
-            st.json(payload)
+        col7, col8 = st.columns(2)
+        with col7:
+            fbs = st.selectbox(
+                "Glycémie à jeun > 120 mg/dl (fbs)",
+                options=[0, 1],
+                format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)",
+            )
+        with col8:
+            exang = st.selectbox(
+                "Angine induite par l'effort (exang)",
+                options=[0, 1],
+                format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)",
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Section 3 : Données ECG & imagerie ───────────────────────────
+        st.markdown(
+            '<div class="section-card">'
+            '<div class="section-title">📈 Données ECG & Imagerie</div>',
+            unsafe_allow_html=True,
+        )
+        col9, col10, col11 = st.columns(3)
+        with col9:
+            restecg = st.selectbox(
+                "Résultats ECG au repos (restecg)",
+                options=[0, 1, 2],
+                format_func=lambda x: {
+                    0: "0 — Normal",
+                    1: "1 — Anomalie onde ST-T",
+                    2: "2 — Hypertrophie ventriculaire gauche",
+                }[x],
+            )
+        with col10:
+            slope = st.selectbox(
+                "Pente du segment ST (slope)",
+                options=[0, 1, 2],
+                format_func=lambda x: {0: "0 — Montante", 1: "1 — Plate", 2: "2 — Descendante"}[x],
+            )
+        with col11:
+            ca = st.selectbox(
+                "Vaisseaux colorés par fluoroscopie (ca)",
+                options=[0, 1, 2, 3, 4],
+                format_func=lambda x: f"{x} vaisseau{'x' if x > 1 else ''}",
+            )
+
+        col12, col13 = st.columns(2)
+        with col12:
+            oldpeak = st.number_input(
+                "Dépression ST à l'effort (oldpeak)",
+                min_value=-10.0, max_value=10.0, value=0.0, step=0.1, format="%.1f",
+            )
+        with col13:
+            thal = st.selectbox(
+                "Thalassémie (thal)",
+                options=[3, 6, 7],
+                format_func=lambda x: {
+                    3: "3 — Normal",
+                    6: "6 — Défaut fixe",
+                    7: "7 — Défaut réversible",
+                }[x],
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Bouton de soumission ──────────────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
+        with col_btn2:
+            submitted = st.form_submit_button("🔬 Analyser", use_container_width=True)
+
+    # ---------------------------------------------------------------------------
+    # 6. Appel API & affichage des résultats
+    # ---------------------------------------------------------------------------
+    if submitted:
+        payload = {
+            "age":      float(age),
+            "sex":      float(sex),
+            "cp":       float(cp),
+            "trestbps": float(trestbps),
+            "chol":     float(chol),
+            "fbs":      float(fbs),
+            "restecg":  float(restecg),
+            "thalach":  float(thalach),
+            "exang":    float(exang),
+            "oldpeak":  float(oldpeak),
+            "slope":    float(slope),
+            "ca":       float(ca),
+            "thal":     float(thal),
+        }
+
+        with st.spinner("Analyse en cours via l'API…"):
+            try:
+                response = requests.post(
+                    PREDICT_BINARY_URL,
+                    json=payload,
+                    timeout=30,
+                )
+                response.raise_for_status()
+                result = response.json()
+
+            except requests.exceptions.ConnectionError:
+                st.markdown(
+                    '<div class="error-box">❌ <b>Impossible de joindre l\'API.</b> '
+                    "Vérifiez que le serveur est en ligne et que l'URL est correcte.</div>",
+                    unsafe_allow_html=True,
+                )
+                result = None
+            except requests.exceptions.Timeout:
+                st.markdown(
+                    '<div class="error-box">⏱️ <b>Délai d\'attente dépassé.</b> '
+                    "Le serveur met trop de temps à répondre (>30s). "
+                    "Sur Render, le démarrage à froid peut prendre ~50s — veuillez réessayer.</div>",
+                    unsafe_allow_html=True,
+                )
+                result = None
+            except requests.exceptions.HTTPError as e:
+                st.markdown(
+                    f'<div class="error-box">⚠️ <b>Erreur HTTP {response.status_code}.</b> '
+                    f"Détail : {response.text}</div>",
+                    unsafe_allow_html=True,
+                )
+                result = None
+            except Exception as e:
+                st.markdown(
+                    f'<div class="error-box">🚨 <b>Erreur inattendue :</b> {e}</div>',
+                    unsafe_allow_html=True,
+                )
+                result = None
+
+        if result:
+            label      = result.get("prediction_label", "N/A")
+            prob       = result.get("probability_disease", 0.0)
+            pred_adj   = result.get("prediction_adjusted", 0)
+            thresh_adj = result.get("threshold_adjusted", 0.50)
+            is_disease = (label == "disease")
+
+            card_class  = "result-disease" if is_disease else "result-healthy"
+            badge_class = "badge-disease"  if is_disease else "badge-healthy"
+            icon        = "🔴" if is_disease else "🟢"
+            label_fr    = "MALADIE CARDIAQUE DÉTECTÉE" if is_disease else "AUCUNE MALADIE DÉTECTÉE"
+            desc        = (
+                "Le modèle identifie un <b>risque cardiovasculaire significatif</b> pour ce profil patient."
+                if is_disease else
+                "Le modèle n'identifie <b>pas de signal clinique alarmant</b> pour ce profil patient."
+            )
+
+            # Couleur de la barre de probabilité
+            prob_pct  = int(prob * 100)
+            bar_color = "#e74c3c" if prob > 0.6 else ("#f39c12" if prob > 0.4 else "#27ae60")
+            # Note : f39c12 est du jaune-doré (warn), mais uniquement dans la barre svg interne — pas du orange UI
+
+            st.markdown(
+                f"""
+                <div class="result-card {card_class}">
+                    <span class="result-badge {badge_class}">{icon} {label_fr}</span>
+                    <h2 style="margin-bottom:0.2rem;">{prob_pct}% de probabilité de maladie</h2>
+                    <p>{desc}</p>
+                    <div class="prob-bar-bg">
+                        <div class="prob-bar-fill" style="width:{prob_pct}%; background:{bar_color};"></div>
+                    </div>
+                    <br>
+                    <p>
+                        <b>Seuil par défaut (0.50) :</b> {'Malade' if result.get("prediction_code") == 1 else 'Sain'} &nbsp;|&nbsp;
+                        <b>Seuil ajusté ({thresh_adj}) :</b> {'Malade' if pred_adj == 1 else 'Sain'}
+                        <span style="font-size:0.75rem; opacity:0.7;"> (optimisé pour le rappel)</span>
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # Détail JSON en expandeur discret
+            with st.expander("📄 Réponse JSON brute de l'API"):
+                st.json(result)
+
+            # Résumé du payload envoyé
+            with st.expander("📤 Données envoyées à l'API"):
+                st.json(payload)
+
+# ==== TAB 2 : PRÉDICTION EN MASSE ====
+with tab2:
+    st.markdown(
+        '<div class="section-card">'
+        '<div class="section-title">📤 Charger un fichier CSV</div>',
+        unsafe_allow_html=True,
+    )
+    
+    st.markdown(
+        "**Format attendu :** Un fichier CSV avec les 13 colonnes suivantes :\n"
+        "`age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal`"
+    )
+    
+    # Créer un template vierge à télécharger
+    # Générer un template avec uniquement les en-têtes (pas de lignes vides)
+    template_columns = [
+        "age", "sex", "cp", "trestbps", "chol", "fbs", "restecg",
+        "thalach", "exang", "oldpeak", "slope", "ca", "thal"
+    ]
+    template_df = pd.DataFrame(columns=template_columns)
+    template_csv = template_df.to_csv(index=False, sep=';')
+    
+    col_template1, col_template2 = st.columns([1, 2])
+    with col_template1:
+        st.download_button(
+            label="📥 Télécharger Template",
+            data=template_csv,
+            file_name="template_patients.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with col_template2:
+        st.caption("Téléchargez le template, remplissez vos données et uploadez-le")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Sélectionnez un fichier CSV", type=["csv"], key="bulk_upload")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if uploaded_file is not None:
+        try:
+            # Lire le CSV avec le bon séparateur (point-virgule)
+            df = pd.read_csv(uploaded_file, sep=';')
+            
+            # Afficher l'aperçu des données
+            st.markdown(
+                '<div class="section-card">'
+                '<div class="section-title">📋 Aperçu des données</div>',
+                unsafe_allow_html=True,
+            )
+            st.write(f"**Nombre de lignes :** {len(df)}")
+            st.write(f"**Colonnes trouvées :** {list(df.columns)}")
+            st.dataframe(df.head(10), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Valider les colonnes requises
+            required_cols = ["age", "sex", "cp", "trestbps", "chol", "fbs", "restecg", 
+                           "thalach", "exang", "oldpeak", "slope", "ca", "thal"]
+            
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            
+            if missing_cols:
+                st.markdown(
+                    f'<div class="error-box">❌ <b>Colonnes manquantes :</b> {", ".join(missing_cols)}</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                # Bouton de lancement des prédictions
+                st.markdown("<br>", unsafe_allow_html=True)
+                col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
+                with col_btn2:
+                    predict_bulk = st.button("🚀 Prédire", use_container_width=True, key="bulk_predict_btn")
+                
+                if predict_bulk:
+                    st.markdown(
+                        '<div class="section-card">'
+                        '<div class="section-title">⏳ Traitement en cours...</div>',
+                        unsafe_allow_html=True,
+                    )
+                    
+                    # Préparer les résultats
+                    results = []
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    total_rows = len(df)
+                    
+                    # Appeler l'API pour chaque ligne
+                    for idx, row in df.iterrows():
+                        try:
+                            # Construire le payload
+                            payload_bulk = {
+                                "age":      float(row["age"]),
+                                "sex":      float(row["sex"]),
+                                "cp":       float(row["cp"]),
+                                "trestbps": float(row["trestbps"]),
+                                "chol":     float(row["chol"]),
+                                "fbs":      float(row["fbs"]),
+                                "restecg":  float(row["restecg"]),
+                                "thalach":  float(row["thalach"]),
+                                "exang":    float(row["exang"]),
+                                "oldpeak":  float(row["oldpeak"]),
+                                "slope":    float(row["slope"]),
+                                "ca":       float(row["ca"]),
+                                "thal":     float(row["thal"]),
+                            }
+                            
+                            # Appeler l'API
+                            response = requests.post(
+                                PREDICT_BINARY_URL,
+                                json=payload_bulk,
+                                timeout=30,
+                            )
+                            response.raise_for_status()
+                            api_result = response.json()
+                            
+                            # Extraire les résultats
+                            result_row = {
+                                "Index": idx + 1,
+                                **{col: row[col] for col in required_cols},
+                                "Prédiction": "🔴 Malade" if api_result.get("prediction_label") == "disease" else "🟢 Sain",
+                                "Probabilité (%)": round(api_result.get("probability_disease", 0) * 100, 2),
+                                "Confiance": round(api_result.get("probability_disease", 0), 4),
+                            }
+                            results.append(result_row)
+                            
+                        except Exception as e:
+                            # En cas d'erreur, enregistrer l'erreur
+                            result_row = {
+                                "Index": idx + 1,
+                                **{col: row[col] for col in required_cols},
+                                "Prédiction": "❌ Erreur",
+                                "Probabilité (%)": None,
+                                "Confiance": None,
+                            }
+                            results.append(result_row)
+                        
+                        # Mettre à jour la barre de progression
+                        progress = (idx + 1) / total_rows
+                        progress_bar.progress(progress)
+                        status_text.text(f"Traitement : {idx + 1}/{total_rows} lignes")
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    # Afficher les résultats
+                    st.markdown(
+                        '<div class="section-card">'
+                        '<div class="section-title">📊 Résultats des prédictions</div>',
+                        unsafe_allow_html=True,
+                    )
+                    
+                    results_df = pd.DataFrame(results)
+                    st.dataframe(results_df, use_container_width=True, hide_index=True)
+                    
+                    # Statistiques
+                    malade_count = sum(1 for r in results if "Malade" in r["Prédiction"])
+                    sain_count = sum(1 for r in results if "Sain" in r["Prédiction"])
+                    erreur_count = sum(1 for r in results if "Erreur" in r["Prédiction"])
+                    
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    with col_stat1:
+                        st.metric("🔴 Malades", malade_count, f"{round(100*malade_count/total_rows, 1)}%")
+                    with col_stat2:
+                        st.metric("🟢 Sains", sain_count, f"{round(100*sain_count/total_rows, 1)}%")
+                    with col_stat3:
+                        st.metric("❌ Erreurs", erreur_count)
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    # Téléchargement CSV
+                    st.markdown(
+                        '<div class="section-card">'
+                        '<div class="section-title">💾 Télécharger les résultats</div>',
+                        unsafe_allow_html=True,
+                    )
+                    
+                    # Préparer le fichier CSV pour le téléchargement
+                    csv_buffer = io.StringIO()
+                    results_df.to_csv(csv_buffer, index=False)
+                    csv_data = csv_buffer.getvalue()
+                    
+                    st.download_button(
+                        label="📥 Télécharger en CSV",
+                        data=csv_data,
+                        file_name="predictions_results.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+        except pd.errors.ParserError:
+            st.markdown(
+                '<div class="error-box">❌ <b>Erreur de format CSV.</b> '
+                "Assurez-vous que le fichier est un CSV valide.</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception as e:
+            st.markdown(
+                f'<div class="error-box">🚨 <b>Erreur inattendue :</b> {str(e)}</div>',
+                unsafe_allow_html=True,
+            )
