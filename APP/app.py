@@ -735,9 +735,16 @@ with tab2:
     with col_t2:
         st.caption("Template avec une ligne exemple (séparateur `;`). Remplissez et uploadez.")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Sélectionnez un fichier CSV", type=["csv"], key="bulk_upload")
     st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.markdown(
+        '<div class="section-card">'
+        '<div class="section-title">📤 Charger et traiter un fichier CSV</div>',
+        unsafe_allow_html=True,
+    )
+    uploaded_file = st.file_uploader("Sélectionnez un fichier CSV", type=["csv"], key="bulk_upload")
 
     if uploaded_file is not None:
         try:
@@ -956,3 +963,5 @@ with tab2:
                 f'<div class="error-box">🚨 <b>Erreur inattendue :</b> {html.escape(str(e))}</div>',
                 unsafe_allow_html=True,
             )
+        finally:
+            st.markdown("</div>", unsafe_allow_html=True)
