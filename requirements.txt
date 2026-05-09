@@ -1,6 +1,6 @@
 numpy==2.0.2
 pandas
-scikit-learn==1.6.1
+scikit-learn==1.8.0
 joblib==1.5.3
 fastapi==0.136.1
 pydantic==2.12.3
