@@ -80,18 +80,36 @@ _startup_error: Optional[str] = None
 try:
     # ── Modèle binaire : charger le meilleur modèle du notebook ──────────────────
     pipeline_binary = _load_pickle(MODELS_DIR / "MEILLEUR_MODELE_BINAIRE.pkl", "Meilleur modèle binaire")
-    print("✓ Meilleur modèle binaire chargé (notebook)")
+    print("Modele binaire charge (notebook)")
+    pipeline_multiclass = _load_joblib(MODELS_DIR / "model_multiclass.joblib", "Modèle multiclasse")
+
+    _meta_path = MODELS_DIR / "metadata.json"
+    if not _meta_path.exists():
+        raise RuntimeError(f"metadata.json introuvable à '{_meta_path}'.")
+    with open(_meta_path, encoding="utf-8") as fh:
+        METADATA = json.load(fh)
+
+    _seuil_path = MODELS_DIR / "seuil_retenu.json"
+    if _seuil_path.exists():
+        with open(_seuil_path, encoding="utf-8") as fh:
+            seuil_data = json.load(fh)
+        ADJUSTED_THRESHOLD = float(seuil_data.get("seuil_retenu", 0.50))
+    else:
+        ADJUSTED_THRESHOLD = float(METADATA["binary_model"].get("adjusted_threshold", 0.50))
+
+    FEATURES = METADATA.get("features", _DEFAULT_FEATURES)
+
 except Exception as _pkl_err:
-    print(f"⚠️  MEILLEUR_MODELE_BINAIRE.pkl non disponible ({_pkl_err}) — essai model_binary.joblib…")
+    print(f"MEILLEUR_MODELE_BINAIRE.pkl non disponible ({_pkl_err}) - essai model_binary.joblib")
     try:
         pipeline_binary = _load_joblib(MODELS_DIR / "model_binary.joblib", "Modèle binaire (joblib)")
-        print("✓ Modèle binaire chargé (joblib)")
+        print("Modele binaire charge (joblib)")
     except Exception as _joblib_err:
         raise RuntimeError(f"Ni MEILLEUR_MODELE_BINAIRE.pkl ni model_binary.joblib ne sont disponibles: {_pkl_err} / {_joblib_err}")
 
     # ── Modèle multiclasse ────────────────────────────────────────────────
     pipeline_multiclass = _load_joblib(MODELS_DIR / "model_multiclass.joblib", "Modèle multiclasse")
-    print("✓ Modèle multiclasse chargé")
+    print("Modele multiclasse charge")
 
     # ── Métadonnées ───────────────────────────────────────────────────────
     _meta_path = MODELS_DIR / "metadata.json"
@@ -106,18 +124,18 @@ except Exception as _pkl_err:
         with open(_seuil_path, encoding="utf-8") as fh:
             seuil_data = json.load(fh)
         ADJUSTED_THRESHOLD = float(seuil_data.get("seuil_retenu", 0.50))
-        print(f"✓ Seuil ajusté chargé : {ADJUSTED_THRESHOLD}")
+        print(f"Seuil ajuste charge : {ADJUSTED_THRESHOLD}")
     else:
         ADJUSTED_THRESHOLD = float(METADATA["binary_model"].get("adjusted_threshold", 0.50))
-        print(f"⚠️  seuil_retenu.json non trouvé — utilisation du seuil par défaut {ADJUSTED_THRESHOLD}")
+        print(f"seuil_retenu.json non trouve - utilisation du seuil par defaut {ADJUSTED_THRESHOLD}")
 
     FEATURES = METADATA.get("features", _DEFAULT_FEATURES)
-    print(f"✓ Métadonnées chargées — seuil ajusté : {ADJUSTED_THRESHOLD}")
+    print(f"Metadonnees chargees - seuil ajuste : {ADJUSTED_THRESHOLD}")
 
 except Exception as _exc:
     # [C1] _startup_error est garanti d'être une str (jamais None si on est ici)
     _startup_error = str(_exc)
-    print(f"❌ Erreur au chargement des modèles : {_startup_error}")
+    print(f"Erreur au chargement des modeles : {_startup_error}")
     # On laisse pipeline_binary / pipeline_multiclass à None ;
     # /health renverra 503 et les endpoints de prédiction renverront 503.
 

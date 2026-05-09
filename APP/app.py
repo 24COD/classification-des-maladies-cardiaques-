@@ -25,6 +25,7 @@ CORRECTIONS APPLIQUÉES :
 
 import html
 import io
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
@@ -221,7 +222,9 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # 2. Constantes API
 # ---------------------------------------------------------------------------
-API_BASE_URL           = "https://ton-api-render.onrender.com"
+API_BASE_URL           = os.getenv("API_BASE_URL", "http://localhost:8000").strip().rstrip("/")
+if not API_BASE_URL.startswith(("http://", "https://")):
+    API_BASE_URL = f"http://{API_BASE_URL}"
 PREDICT_BINARY_URL     = f"{API_BASE_URL}/predict/binary"
 PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
 
