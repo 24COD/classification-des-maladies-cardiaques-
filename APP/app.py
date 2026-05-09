@@ -221,7 +221,7 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # 2. Constantes API
 # ---------------------------------------------------------------------------
-API_BASE_URL           = "http://localhost:8001"
+API_BASE_URL           = "https://ton-api-render.onrender.com"
 PREDICT_BINARY_URL     = f"{API_BASE_URL}/predict/binary"
 PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
 
