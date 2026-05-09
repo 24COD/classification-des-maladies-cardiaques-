@@ -22,6 +22,7 @@ Documentation interactive :
 """
 
 import json
+import pickle
 from pathlib import Path
 from typing import List, Optional
 
@@ -44,9 +45,26 @@ def _load_artifact(path: Path, label: str):
         )
     return joblib.load(path)
 
+def _load_artifact_pkl(path: Path, label: str):
+    """Charge un modèle au format .pkl (pickle)"""
+    if not path.exists():
+        raise RuntimeError(
+            f"{label} introuvable à '{path}'."
+        )
+    with open(path, 'rb') as f:
+        return pickle.load(f)
+
 try:
-    pipeline_binary     = _load_artifact(MODELS_DIR / "model_binary.joblib",     "Modèle binaire")
+    # Essayer de charger le modèle binaire en .pkl d'abord
+    try:
+        pipeline_binary = _load_artifact_pkl(MODELS_DIR / "model_binary.pkl", "Modèle binaire (PKL)")
+        print("✓ Modèle binaire chargé en format PKL")
+    except Exception as e:
+        print(f"⚠️  Impossible de charger PKL, essai du format joblib: {e}")
+        pipeline_binary = _load_artifact(MODELS_DIR / "model_binary.joblib", "Modèle binaire (joblib)")
+    
     pipeline_multiclass = _load_artifact(MODELS_DIR / "model_multiclass.joblib", "Modèle multiclasse")
+    
     with open(MODELS_DIR / "metadata.json", encoding="utf-8") as fh:
         METADATA = json.load(fh)
     ADJUSTED_THRESHOLD = float(METADATA["binary_model"].get("adjusted_threshold", 0.50))
@@ -151,7 +169,11 @@ def _patients_to_df(patients: List[PatientFeatures]) -> pd.DataFrame:
 
 
 def _predict_binary(df: pd.DataFrame):
-    proba = pipeline_binary.predict_proba(df)[:, 1]
+    # Utiliser le nouveau modèle .pkl sans modification
+    # pour voir les prédictions brutes
+    all_proba = pipeline_binary.predict_proba(df)
+    proba = all_proba[:, 1]  # Probabilité de la classe 1
+    
     pred_default  = (proba >= 0.50).astype(int)
     pred_adjusted = (proba >= ADJUSTED_THRESHOLD).astype(int)
     return proba, pred_default, pred_adjusted
