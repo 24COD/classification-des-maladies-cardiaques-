@@ -20,7 +20,4 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: API_BASE_URL
-        fromService:
-          type: web
-          name: cardiorisk-api
-          property: hostport
+        value: https://cardiorisk-api.onrender.com

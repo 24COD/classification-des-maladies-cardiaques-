@@ -62,3 +62,7 @@ API_BASE_URL=https://URL-DE-TON-API-RENDER
 
 Exemple : si l'API est disponible sur `https://cardiorisk-api.onrender.com`,
 mettez exactement cette URL, sans `/predict/binary` a la fin.
+
+Sur le plan gratuit Render, utilisez l'URL publique `.onrender.com` pour
+`API_BASE_URL`. L'adresse interne `hostport` n'est pas adaptee ici, car les
+Web Services gratuits ne recoivent pas de trafic prive entrant.

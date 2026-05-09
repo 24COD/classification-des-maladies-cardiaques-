@@ -229,7 +229,7 @@ PREDICT_BINARY_URL     = f"{API_BASE_URL}/predict/binary"
 PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
 
 # Timeout en secondes (10s pour API locale)
-API_TIMEOUT   = 10
+API_TIMEOUT   = 60
 API_MAX_RETRY = 1   # 1 retry automatique en cas de timeout
 
 REQUIRED_COLS = [
