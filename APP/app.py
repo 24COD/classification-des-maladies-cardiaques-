@@ -29,6 +29,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
@@ -231,6 +232,7 @@ PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
 # Timeout en secondes (10s pour API locale)
 API_TIMEOUT   = 60
 API_MAX_RETRY = 1   # 1 retry automatique en cas de timeout
+API_FALLBACK_STATUS_CODES = {502, 503, 504}
 
 # Colonnes STRICTEMENT REQUISES (selon l'API PatientFeatures)
 REQUIRED_COLS = ["age", "sex", "cp"]
@@ -265,6 +267,39 @@ CLASS_LABELS_SHORT = {
 # 3. Helpers
 # ---------------------------------------------------------------------------
 
+def _compact_response_text(text: str, limit: int = 700) -> str:
+    """Retourne un extrait lisible d'une erreur HTML/texte trop longue."""
+    clean = " ".join(html.escape(text or "").split())
+    return clean if len(clean) <= limit else f"{clean[:limit]}..."
+
+
+def _local_model_fallback(url: str, payload: dict) -> Optional[dict]:
+    """
+    Predit directement dans Streamlit si l'API Render est indisponible.
+
+    Le service Streamlit deploie le meme repository et dispose donc aussi des
+    modeles dans `models/`. Ce fallback evite qu'un 502 Render bloque l'app.
+    """
+    endpoint_path = urlparse(url).path.rstrip("/")
+    if endpoint_path not in {"/predict/binary", "/predict/multiclass"}:
+        return None
+
+    try:
+        from API.api import PatientFeatures, predict_binary, predict_multiclass
+
+        patient = PatientFeatures(**payload)
+        if endpoint_path == "/predict/binary":
+            result = predict_binary(patient)
+        else:
+            result = predict_multiclass(patient)
+
+        data = result.model_dump()
+        data["_source"] = "local_fallback"
+        return data
+    except Exception:
+        return None
+
+
 def call_api(url: str, payload: dict) -> dict:
     """
     Appelle l'API avec retry automatique.
@@ -277,15 +312,25 @@ def call_api(url: str, payload: dict) -> dict:
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout as e:
+            fallback = _local_model_fallback(url, payload)
+            if fallback is not None:
+                return fallback
             last_exc = e
             if attempt < API_MAX_RETRY:
                 time.sleep(2)
             continue
         except requests.exceptions.ConnectionError as e:
+            fallback = _local_model_fallback(url, payload)
+            if fallback is not None:
+                return fallback
             raise requests.exceptions.ConnectionError(str(e)) from e
         except requests.exceptions.HTTPError as e:
             # [C7] Échappement HTML pour éviter XSS dans l'affichage de l'erreur
-            e.response_text = html.escape(resp.text)
+            if resp.status_code in API_FALLBACK_STATUS_CODES:
+                fallback = _local_model_fallback(url, payload)
+                if fallback is not None:
+                    return fallback
+            e.response_text = _compact_response_text(resp.text)
             e.status_code   = resp.status_code
             raise e
     raise requests.exceptions.Timeout(str(last_exc))
@@ -596,6 +641,12 @@ with tab1:
                 )
 
         if result:
+            if result.get("_source") == "local_fallback":
+                st.info(
+                    "API Render indisponible momentanement. "
+                    "Prediction realisee avec les modeles locaux du service Streamlit."
+                )
+
             if st.session_state.selected_model == "binary":
                 # ── MODÈLE BINAIRE ──────────────────────────────────────
                 # [C1] On utilise "prediction_label" (str), jamais "prediction_code" seul
