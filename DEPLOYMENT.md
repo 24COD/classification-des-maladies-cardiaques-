@@ -11,6 +11,11 @@ services :
 Dans Render, choisissez **New +** puis **Blueprint**, connectez le repo GitHub,
 et selectionnez ce repository. Render lira `render.yaml`.
 
+Le projet force Python `3.11.9` avec `.python-version` et `PYTHON_VERSION`
+dans `render.yaml`. C'est important parce que les versions recentes de Render
+utilisent Python 3.14 par defaut, ce qui peut forcer `pandas` a compiler depuis
+les sources.
+
 ## API FastAPI
 
 Deployez le projet depuis la racine du repository pour que le dossier `models/`
