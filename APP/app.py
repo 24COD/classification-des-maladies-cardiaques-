@@ -804,7 +804,7 @@ with tab2:
                         results       = [None] * total_rows
                         completed_cnt = 0
 
-        def _predict_row(args):
+                        def _predict_row(args):
                             """Fonction worker pour le pool de threads."""
                             row_idx, row = args
                             try:
