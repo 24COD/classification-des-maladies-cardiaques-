@@ -1,4 +1,6 @@
 {
+  "dataset": "UCI Heart Disease",
+  "n_samples": 303,
   "features": [
     "age",
     "sex",
@@ -14,53 +16,19 @@
     "ca",
     "thal"
   ],
-  "num_features": [
-    "age",
-    "trestbps",
-    "chol",
-    "thalach",
-    "oldpeak"
-  ],
-  "cat_features": [
-    "sex",
-    "cp",
-    "fbs",
-    "restecg",
-    "exang",
-    "slope",
-    "ca",
-    "thal"
-  ],
   "binary_model": {
-    "model": "GradientBoostingClassifier",
-    "task": "binary",
-    "imputation": "iterative_mode",
-    "default_threshold": 0.5,
-    "adjusted_threshold": 0.4,
-    "test_accuracy": 0.8641,
-    "test_precision": 0.8532,
-    "test_recall": 0.9118,
-    "test_f1": 0.8815,
-    "test_roc_auc": 0.9122,
-    "test_recall_adjusted": 0.951,
-    "test_precision_adjusted": 0.822,
-    "test_f1_adjusted": 0.8818
+    "model": "RandomForestClassifier",
+    "n_estimators": 300,
+    "max_features": "log2",
+    "min_samples_split": 10,
+    "test_roc_auc": 0.9535,
+    "adjusted_threshold": 0.1
   },
   "multiclass_model": {
-    "model": "GradientBoostingClassifier",
-    "task": "multiclass",
-    "imputation": "knn_mode",
-    "test_accuracy": 0.5815,
-    "test_precision": 0.3478,
-    "test_recall": 0.3475,
-    "test_f1": 0.3443,
-    "test_roc_auc": 0.7727,
-    "classes": [
-      0,
-      1,
-      2,
-      3,
-      4
-    ]
+    "model": "RandomForestClassifier",
+    "n_estimators": 200,
+    "max_features": "sqrt",
+    "min_samples_split": 5,
+    "test_roc_auc": 0.7694
   }
 }
