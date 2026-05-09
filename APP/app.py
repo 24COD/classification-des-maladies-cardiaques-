@@ -232,14 +232,18 @@ PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
 API_TIMEOUT   = 60
 API_MAX_RETRY = 1   # 1 retry automatique en cas de timeout
 
-REQUIRED_COLS = [
-    "age", "sex", "cp", "trestbps", "chol", "fbs",
-    "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal",
+# Colonnes STRICTEMENT REQUISES (selon l'API PatientFeatures)
+REQUIRED_COLS = ["age", "sex", "cp"]
+
+# Colonnes OPTIONNELLES (peuvent être None/NaN dans le CSV)
+OPTIONAL_COLS_LIST = [
+    "trestbps", "chol", "fbs", "restecg", "thalach",
+    "exang", "oldpeak", "slope", "ca", "thal"
 ]
 
-# Champs optionnels dans l'API (peuvent être None/NaN dans le CSV)
-OPTIONAL_COLS = {"trestbps", "chol", "fbs", "restecg", "thalach",
-                 "exang", "oldpeak", "slope", "ca", "thal"}
+# Ensemble pour recherche rapide (union des deux)
+ALL_EXPECTED_COLS = set(REQUIRED_COLS + OPTIONAL_COLS_LIST)
+OPTIONAL_COLS_SET = set(OPTIONAL_COLS_LIST)  # Pour vérification rapide
 
 CLASS_LABELS = {
     0: "Absence de maladie",
@@ -321,16 +325,33 @@ def predict_single_row(url: str, row: pd.Series) -> dict:
 
     [C12] Les champs optionnels avec NaN sont envoyés comme None (null JSON),
           ce que l'API accepte. Les champs requis sont toujours convertis en float.
+    
+    [FIXED] Gère les colonnes manquantes (returnne None si absent).
+            Gère les NaN pour TOUS les champs, pas seulement les optionnels.
     """
     payload = {}
+    
+    # ── Colonnes REQUISES (age, sex, cp) ─────────────────────────────────
     for col in REQUIRED_COLS:
+        if col not in row.index:
+            # Colonne manquante → c'est une erreur pour les champs requis
+            raise ValueError(f"Colonne requise manquante: '{col}'")
         val = row[col]
-        if col in OPTIONAL_COLS:
-            # NaN ou pd.isna → None (null JSON)
-            payload[col] = None if pd.isna(val) else float(val)
+        # NaN → None (acceptable pour l'API car elle peut valider)
+        if pd.isna(val):
+            raise ValueError(f"Valeur manquante (NaN) pour colonne requise: '{col}'")
+        payload[col] = float(val)
+    
+    # ── Colonnes OPTIONNELLES ────────────────────────────────────────────
+    for col in OPTIONAL_COLS_LIST:
+        if col not in row.index:
+            # Colonne manquante dans CSV → utiliser None par défaut
+            payload[col] = None
         else:
-            # Champs requis : conversion directe
-            payload[col] = float(val)
+            val = row[col]
+            # NaN → None (null JSON)
+            payload[col] = None if pd.isna(val) else float(val)
+    
     return call_api(url, payload)
 
 
@@ -695,9 +716,10 @@ with tab2:
     )
 
     # Template téléchargeable (avec ligne exemple)
+    all_cols = REQUIRED_COLS + OPTIONAL_COLS_LIST
     template_df = pd.DataFrame(
         [[54, 1, 0, 130, 246, 0, 0, 150, 0, 0.0, 0, 0, 3]],
-        columns=REQUIRED_COLS,
+        columns=all_cols,
     )
     template_csv = template_df.to_csv(index=False, sep=";")
 
@@ -730,16 +752,28 @@ with tab2:
             st.write(f"**Nombre de lignes :** {len(df)}")
             st.write(f"**Colonnes trouvées :** {list(df.columns)}")
             st.dataframe(df.head(10), use_container_width=True)
+            
+            # Vérifier les colonnes manquantes (optionnelles)
+            missing_optional = [c for c in OPTIONAL_COLS_LIST if c not in df.columns]
+            if missing_optional:
+                st.info(f"ℹ️ Colonnes optionnelles manquantes : {', '.join(missing_optional)}. "
+                        f"Elles seront traitées comme valeurs manquantes (None).")
+            
             st.markdown("</div>", unsafe_allow_html=True)
 
             missing_cols = [c for c in REQUIRED_COLS if c not in df.columns]
 
             if missing_cols:
                 st.markdown(
-                    f'<div class="error-box">❌ <b>Colonnes manquantes :</b> {", ".join(missing_cols)}</div>',
+                    f'<div class="error-box">❌ <b>Colonnes requises manquantes :</b> {", ".join(missing_cols)}</div>',
                     unsafe_allow_html=True,
                 )
             else:
+                # Avertissement pour colonnes inattendues (non requises et non optionnelles)
+                unexpected_cols = [c for c in df.columns if c not in ALL_EXPECTED_COLS]
+                if unexpected_cols:
+                    st.warning(f"⚠️ Colonnes inattendues qui seront ignorées : {', '.join(unexpected_cols)}")
+                
                 # [C3] Garde contre ZeroDivisionError si fichier vide
                 total_rows = len(df)
                 if total_rows == 0:
@@ -770,7 +804,7 @@ with tab2:
                         results       = [None] * total_rows
                         completed_cnt = 0
 
-                        def _predict_row(args):
+        def _predict_row(args):
                             """Fonction worker pour le pool de threads."""
                             row_idx, row = args
                             try:
@@ -780,7 +814,7 @@ with tab2:
                                     is_dis = api_result.get("prediction_label") == "disease"
                                     return row_idx, {
                                         "Index":           row_idx + 1,
-                                        **{c: row[c] for c in REQUIRED_COLS},
+                                        **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
                                         # [C4] champ "status" séparé pour comptage fiable
                                         "status":          "disease" if is_dis else "healthy",
                                         "Prédiction":      "🔴 Malade" if is_dis else "🟢 Sain",
@@ -802,7 +836,7 @@ with tab2:
                                     )
                                     return row_idx, {
                                         "Index":         row_idx + 1,
-                                        **{c: row[c] for c in REQUIRED_COLS},
+                                        **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
                                         "status":        "ok" if pred_class is not None else "error",
                                         "Classe":        pred_class,
                                         "Sévérité":      CLASS_LABELS_SHORT.get(pred_class, "Inconnue"),
@@ -813,7 +847,7 @@ with tab2:
                             except Exception as exc:
                                 return row_idx, {
                                     "Index":           row_idx + 1,
-                                    **{c: row[c] for c in REQUIRED_COLS},
+                                    **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
                                     "status":          "error",
                                     "Prédiction":      "❌ Erreur",
                                     "Probabilité (%)": None,
