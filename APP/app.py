@@ -1,14 +1,6 @@
 """
 app.py — Interface Streamlit pour l'API de prédiction des maladies cardiaques
 =============================================================================
-API cible : https://classification-des-maladies-cardiaques-1-zbq3.onrender.com
-Endpoint  : POST /predict/binary | POST /predict/multiclass
-
-FONCTIONNALITÉS :
-  - Onglet 1 : Prédiction individuelle via formulaire.
-  - Onglet 2 : Prédiction en masse stricte. Affiche uniquement les données 
-               chargées, fait la prédiction globale, et renvoie le tableau 
-               exact d'origine avec les colonnes de prédictions ajoutées.
 """
 
 import html
@@ -247,19 +239,13 @@ OPTIONAL_COLS_LIST = [
 ALL_EXPECTED_COLS = set(REQUIRED_COLS + OPTIONAL_COLS_LIST)
 
 CLASS_LABELS = {
-    0: "Absence de maladie",
-    1: "Maladie légère",
-    2: "Maladie modérée",
-    3: "Maladie sévère",
-    4: "Maladie très sévère",
+    0: "Absence de maladie", 1: "Maladie légère",
+    2: "Maladie modérée", 3: "Maladie sévère", 4: "Maladie très sévère",
 }
 
 CLASS_LABELS_SHORT = {
-    0: "Pas de maladie",
-    1: "Légère",
-    2: "Modérée",
-    3: "Sévère",
-    4: "Très sévère",
+    0: "Pas de maladie", 1: "Légère",
+    2: "Modérée", 3: "Sévère", 4: "Très sévère",
 }
 
 # ---------------------------------------------------------------------------
@@ -324,9 +310,7 @@ with st.sidebar:
         format_func=lambda x: f"🔵 {x}" if x == "Binaire" else f"📊 {x}",
         key="model_selector",
     )
-    st.session_state.selected_model = (
-        "binary" if selected_model_label == "Binaire" else "multiclass"
-    )
+    st.session_state.selected_model = "binary" if selected_model_label == "Binaire" else "multiclass"
 
     if selected_model_label == "Binaire":
         st.markdown('<div class="info-pill">🔵 <b>Binaire</b> — Sain / Malade</div>', unsafe_allow_html=True)
@@ -334,19 +318,8 @@ with st.sidebar:
         st.markdown('<div class="info-pill">📊 <b>Multiclasse</b> — Sévérité 0–4</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### À propos")
-    st.markdown(
-        "Cette interface interroge une API de Machine Learning "
-        "entraînée sur le dataset **UCI Heart Disease** "
-        "(303 patients, 13 variables cliniques)."
-    )
-    st.markdown("---")
-
     st.markdown("### Endpoint actif")
-    endpoint_display = (
-        "/predict/binary" if st.session_state.selected_model == "binary"
-        else "/predict/multiclass"
-    )
+    endpoint_display = "/predict/binary" if st.session_state.selected_model == "binary" else "/predict/multiclass"
     st.code(f"POST {endpoint_display}", language="bash")
 
 # ---------------------------------------------------------------------------
@@ -356,8 +329,7 @@ st.markdown("<h1>Prédiction du Risque Cardiaque</h1>", unsafe_allow_html=True)
 st.markdown(
     "<p style='color:#475569; font-size:1rem; margin-top:-0.5rem; margin-bottom:1.5rem;'>"
     "Évaluation avancée du risque cardiovasculaire selon les données cliniques."
-    "</p>",
-    unsafe_allow_html=True,
+    "</p>", unsafe_allow_html=True
 )
 st.markdown('<hr class="styled-hr">', unsafe_allow_html=True)
 
@@ -371,223 +343,113 @@ tab1, tab2 = st.tabs(["🔍 Prédiction Individuelle", "📊 Prédiction en Mass
 # ===========================================================================
 with tab1:
     with st.form("patient_form", clear_on_submit=False):
-        st.markdown(
-            '<div class="section-card">'
-            '<div class="section-title">📋 Informations démographiques</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="section-card"><div class="section-title">📋 Informations démographiques</div>', unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
-        with col1:
-            age = st.number_input("Âge (années)", min_value=0, max_value=120, value=54, step=1)
-        with col2:
-            sex = st.selectbox("Sexe", options=[1, 0], format_func=lambda x: "Homme" if x == 1 else "Femme")
-        with col3:
-            cp = st.selectbox(
-                "Type de douleur thoracique (cp)",
-                options=[0, 1, 2, 3],
-                format_func=lambda x: {
-                    0: "0 — Angine typique",
-                    1: "1 — Angine atypique",
-                    2: "2 — Douleur non angineuse",
-                    3: "3 — Asymptomatique",
-                }[x],
-            )
+        with col1: age = st.number_input("Âge (années)", min_value=0, max_value=120, value=54, step=1)
+        with col2: sex = st.selectbox("Sexe", options=[1, 0], format_func=lambda x: "Homme" if x == 1 else "Femme")
+        with col3: cp = st.selectbox("Type de douleur thoracique (cp)", options=[0, 1, 2, 3], format_func=lambda x: {0: "0 — Angine typique", 1: "1 — Angine atypique", 2: "2 — Douleur non angineuse", 3: "3 — Asymptomatique"}[x])
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown(
-            '<div class="section-card">'
-            '<div class="section-title">💓 Paramètres cardiovasculaires</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="section-card"><div class="section-title">💓 Paramètres cardiovasculaires</div>', unsafe_allow_html=True)
         col4, col5, col6 = st.columns(3)
-        with col4:
-            trestbps = st.number_input("Tension artérielle au repos (mm Hg)", min_value=0.0, max_value=300.0, value=130.0, step=1.0)
-        with col5:
-            chol = st.number_input("Cholestérol sérique (mg/dl)", min_value=0.0, max_value=700.0, value=246.0, step=1.0)
-        with col6:
-            thalach = st.number_input("Fréquence cardiaque max. (bpm)", min_value=0.0, max_value=300.0, value=150.0, step=1.0)
+        with col4: trestbps = st.number_input("Tension artérielle (mm Hg)", min_value=0.0, max_value=300.0, value=130.0, step=1.0)
+        with col5: chol = st.number_input("Cholestérol sérique (mg/dl)", min_value=0.0, max_value=700.0, value=246.0, step=1.0)
+        with col6: thalach = st.number_input("Fréq. cardiaque max. (bpm)", min_value=0.0, max_value=300.0, value=150.0, step=1.0)
 
         col7, col8 = st.columns(2)
-        with col7:
-            fbs = st.selectbox("Glycémie à jeun > 120 mg/dl (fbs)", options=[0, 1], format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)")
-        with col8:
-            exang = st.selectbox("Angine induite par l'effort (exang)", options=[0, 1], format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)")
+        with col7: fbs = st.selectbox("Glycémie à jeun > 120 mg/dl (fbs)", options=[0, 1], format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)")
+        with col8: exang = st.selectbox("Angine induite par l'effort (exang)", options=[0, 1], format_func=lambda x: "Oui (1)" if x == 1 else "Non (0)")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown(
-            '<div class="section-card">'
-            '<div class="section-title">📈 Données ECG & Imagerie</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="section-card"><div class="section-title">📈 Données ECG & Imagerie</div>', unsafe_allow_html=True)
         col9, col10, col11 = st.columns(3)
-        with col9:
-            restecg = st.selectbox(
-                "Résultats ECG au repos (restecg)",
-                options=[0, 1, 2],
-                format_func=lambda x: {
-                    0: "0 — Normal",
-                    1: "1 — Anomalie onde ST-T",
-                    2: "2 — Hypertrophie ventriculaire gauche",
-                }[x],
-            )
-        with col10:
-            slope = st.selectbox(
-                "Pente du segment ST (slope)",
-                options=[0, 1, 2],
-                format_func=lambda x: {0: "0 — Montante", 1: "1 — Plate", 2: "2 — Descendante"}[x],
-            )
-        with col11:
-            ca = st.selectbox(
-                "Vaisseaux colorés par fluoroscopie (ca)",
-                options=[0, 1, 2, 3, 4],
-                format_func=lambda x: f"{x} vaisseau{'x' if x > 1 else ''}",
-            )
+        with col9: restecg = st.selectbox("Résultats ECG au repos (restecg)", options=[0, 1, 2], format_func=lambda x: {0: "0 — Normal", 1: "1 — Anomalie", 2: "2 — Hypertrophie"}[x])
+        with col10: slope = st.selectbox("Pente segment ST (slope)", options=[0, 1, 2], format_func=lambda x: {0: "0 — Montante", 1: "1 — Plate", 2: "2 — Descendante"}[x])
+        with col11: ca = st.selectbox("Vaisseaux fluoroscopie (ca)", options=[0, 1, 2, 3, 4])
 
         col12, col13 = st.columns(2)
-        with col12:
-            oldpeak = st.number_input("Dépression ST à l'effort (oldpeak)", min_value=-10.0, max_value=10.0, value=0.0, step=0.1, format="%.1f")
-        with col13:
-            thal = st.selectbox(
-                "Thalassémie (thal)",
-                options=[3, 6, 7],
-                format_func=lambda x: {3: "3 — Normal", 6: "6 — Défaut fixe", 7: "7 — Défaut réversible"}[x],
-            )
+        with col12: oldpeak = st.number_input("Dépression ST (oldpeak)", min_value=-10.0, max_value=10.0, value=0.0, step=0.1, format="%.1f")
+        with col13: thal = st.selectbox("Thalassémie (thal)", options=[3, 6, 7], format_func=lambda x: {3: "3 — Normal", 6: "6 — Défaut fixe", 7: "7 — Défaut réversible"}[x])
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
-        with col_btn2:
-            submitted = st.form_submit_button("🔬 Lancer la prédiction", use_container_width=True)
+        with col_btn2: submitted = st.form_submit_button("🔬 Lancer la prédiction", use_container_width=True)
 
     if submitted:
-        payload = {
-            "age":      float(age), "sex":      float(sex), "cp":       float(cp),
-            "trestbps": float(trestbps), "chol":     float(chol), "fbs":      float(fbs),
-            "restecg":  float(restecg), "thalach":  float(thalach), "exang":    float(exang),
-            "oldpeak":  float(oldpeak), "slope":    float(slope), "ca":       float(ca),
-            "thal":     float(thal),
-        }
-
-        clin_warnings = validate_clinical(payload)
-        for w in clin_warnings:
-            st.warning(f"⚠️ {w}")
+        payload = {"age": float(age), "sex": float(sex), "cp": float(cp), "trestbps": float(trestbps), "chol": float(chol), "fbs": float(fbs), "restecg": float(restecg), "thalach": float(thalach), "exang": float(exang), "oldpeak": float(oldpeak), "slope": float(slope), "ca": float(ca), "thal": float(thal)}
 
         predict_url = PREDICT_MULTICLASS_URL if st.session_state.selected_model == "multiclass" else PREDICT_BINARY_URL
 
         with st.spinner("Analyse en cours via l'API…"):
-            result = None
             try:
                 result = call_api(predict_url, payload)
+                if st.session_state.selected_model == "binary":
+                    label = result.get("prediction_label", "healthy")
+                    prob = result.get("probability_disease", result.get("probability", 0.0))
+                    is_disease = (label == "disease" or result.get("prediction") == 1)
+
+                    card_class = "result-disease" if is_disease else "result-healthy"
+                    badge_class = "badge-disease" if is_disease else "badge-healthy"
+                    icon, label_fr = ("🔴", "MALADIE DÉTECTÉE") if is_disease else ("🟢", "AUCUNE MALADIE DÉTECTÉE")
+                    prob_pct = int(prob * 100)
+                    bar_color = "#e74c3c" if prob > 0.6 else ("#f39c12" if prob > 0.4 else "#27ae60")
+
+                    st.markdown(f"""
+                        <div class="result-card {card_class}">
+                            <span class="result-badge {badge_class}">{icon} {label_fr}</span>
+                            <h2 style="margin-bottom:0.2rem;">{prob_pct}% de probabilité</h2>
+                            <div class="prob-bar-bg"><div class="prob-bar-fill" style="width:{prob_pct}%; background:{bar_color};"></div></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    pred_class = result.get("prediction_code", result.get("prediction", 0))
+                    probs_list = result.get("probabilities", [])
+                    prob_value = float(probs_list[pred_class]) if (isinstance(probs_list, list) and len(probs_list) > pred_class) else float(result.get("probability", 0))
+                    pred_label = CLASS_LABELS.get(pred_class, "Inconnue")
+                    
+                    st.markdown(f"""
+                        <div class="result-card result-disease">
+                            <span class="result-badge badge-disease">🔴 {pred_label}</span>
+                            <h2 style="margin-bottom:0.2rem;">Classe {pred_class} — {int(prob_value * 100)}% de confiance</h2>
+                        </div>
+                    """, unsafe_allow_html=True)
             except Exception as e:
-                st.markdown(
-                    f'<div class="error-box">🚨 <b>Erreur :</b> {html.escape(str(e))}</div>',
-                    unsafe_allow_html=True,
-                )
-
-        if result:
-            if st.session_state.selected_model == "binary":
-                label      = result.get("prediction_label", "healthy")
-                prob       = result.get("probability_disease", 0.0)
-                is_disease = (label == "disease")
-
-                card_class  = "result-disease" if is_disease else "result-healthy"
-                badge_class = "badge-disease"  if is_disease else "badge-healthy"
-                icon        = "🔴" if is_disease else "🟢"
-                label_fr    = "MALADIE DÉTECTÉE" if is_disease else "AUCUNE MALADIE DÉTECTÉE"
-                desc        = "Risque cardiovasculaire significatif." if is_disease else "Pas de signal clinique alarmant."
-                prob_pct    = int(prob * 100)
-                bar_color   = "#e74c3c" if prob > 0.6 else ("#f39c12" if prob > 0.4 else "#27ae60")
-
-                st.markdown(
-                    f"""
-                    <div class="result-card {card_class}">
-                        <span class="result-badge {badge_class}">{icon} {label_fr}</span>
-                        <h2 style="margin-bottom:0.2rem;">{prob_pct}% de probabilité</h2>
-                        <p>{desc}</p>
-                        <div class="prob-bar-bg">
-                            <div class="prob-bar-fill" style="width:{prob_pct}%; background:{bar_color};"></div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                pred_class = result.get("prediction_code", 0)
-                probs_list = result.get("probabilities", [])
-                prob_value = float(probs_list[pred_class]) if (isinstance(probs_list, list) and len(probs_list) > pred_class) else 0.0
-
-                pred_label = CLASS_LABELS.get(pred_class, "Inconnue")
-                severity_colors = {
-                    0: {"card": "result-healthy", "badge": "badge-healthy", "icon": "🟢"},
-                    1: {"card": "result-disease", "badge": "badge-disease", "icon": "🟡"},
-                    2: {"card": "result-disease", "badge": "badge-disease", "icon": "🟠"},
-                    3: {"card": "result-disease", "badge": "badge-disease", "icon": "🔴"},
-                    4: {"card": "result-disease", "badge": "badge-disease", "icon": "🔴"},
-                }
-                colors   = severity_colors.get(pred_class, severity_colors[0])
-                prob_pct = int(prob_value * 100)
-
-                st.markdown(
-                    f"""
-                    <div class="result-card {colors['card']}">
-                        <span class="result-badge {colors['badge']}">{colors['icon']} {pred_label}</span>
-                        <h2 style="margin-bottom:0.2rem;">Classe {pred_class} — {prob_pct}% de confiance</h2>
-                        <div class="prob-bar-bg">
-                            <div class="prob-bar-fill" style="width:{prob_pct}%; background:#3498db;"></div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                st.error(f"Erreur de communication API: {e}")
 
 # ===========================================================================
 # TAB 2 — Prédiction en masse (Vrai Batch Processing, strict et fidèle)
 # ===========================================================================
 with tab2:
-    st.markdown(
-        '<div class="section-card">'
-        '<div class="section-title">📥 1. Obtenir le Template</div>',
-        unsafe_allow_html=True,
-    )
-
-    template_df = pd.DataFrame([[54, 1, 0, 130, 246, 0, 0, 150, 0, 0.0, 0, 0, 3]], columns=list(ALL_EXPECTED_COLS))
-    template_csv = template_df.to_csv(index=False, sep=";")
+    st.markdown('<div class="section-card"><div class="section-title">📥 1. Obtenir le Template</div>', unsafe_allow_html=True)
+    template_df = pd.DataFrame([[63, 1, 1, 145, 233, 1, 2, 150, 0, 2.3, 3, 0, 6]], columns=list(ALL_EXPECTED_COLS))
+    template_csv = template_df.to_csv(index=False, sep=";") # Votre séparateur par défaut
 
     col_t1, col_t2 = st.columns([1, 2])
     with col_t1:
-        st.download_button(
-            label="📥 Télécharger le Template CSV",
-            data=template_csv,
-            file_name="template_patients.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+        st.download_button(label="📥 Télécharger le Template CSV", data=template_csv, file_name="template_patients.csv", mime="text/csv", use_container_width=True)
     with col_t2:
-        st.caption("Utilisez ce modèle pour préparer vos données. Remplissez les informations, puis chargez le fichier ci-dessous.")
+        st.caption("Utilisez ce modèle pour préparer vos données (séparateur `;`).")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="section-card">'
-        '<div class="section-title">📤 2. Charger les données et Prédire</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="section-card"><div class="section-title">📤 2. Charger les données et Prédire</div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Sélectionnez votre fichier complété", type=["csv"], key="bulk_upload")
 
     if uploaded_file is not None:
         try:
-            # Lecture du fichier original sans altération
-            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+            # 1. Lecture intelligente pour conserver EXACTEMENT votre séparateur d'origine
+            raw_bytes = uploaded_file.getvalue()
+            csv_text = raw_bytes.decode("utf-8")
+            # Détection de votre séparateur (;)
+            detected_sep = ";" if ";" in csv_text.split('\n')[0] else ","
+            
+            df = pd.read_csv(io.StringIO(csv_text), sep=detected_sep)
             
             missing_cols = [c for c in REQUIRED_COLS if c not in df.columns]
             if missing_cols:
                 st.error(f"❌ Colonnes obligatoires manquantes : {', '.join(missing_cols)}")
                 st.stop()
-            
-            if len(df) == 0:
-                st.warning("⚠️ Le fichier CSV est vide.")
-                st.stop()
 
-            # Affichage strict uniquement des données chargées (intégralité du tableau)
             st.markdown("##### 📋 Données chargées prêtes pour l'analyse")
             st.dataframe(df, use_container_width=True)
 
@@ -597,54 +459,78 @@ with tab2:
                 predict_bulk = st.button("🚀 Lancer la prédiction en masse", use_container_width=True)
 
             if predict_bulk:
-                predict_url = (
-                    PREDICT_MULTICLASS_BATCH_CSV_URL
-                    if st.session_state.selected_model == "multiclass"
-                    else PREDICT_BINARY_BATCH_CSV_URL
-                )
+                predict_url = PREDICT_MULTICLASS_BATCH_CSV_URL if st.session_state.selected_model == "multiclass" else PREDICT_BINARY_BATCH_CSV_URL
 
                 with st.spinner("Transmission sécurisée et traitement par l'API..."):
                     try:
-                        uploaded_file.seek(0)
-                        files = {"file": ("data.csv", uploaded_file.getvalue(), "text/csv")}
+                        # 2. On formate proprement en virgule (,) JUSTE pour l'API pour éviter les crashs côté Backend
+                        clean_csv_buffer = io.StringIO()
+                        df.to_csv(clean_csv_buffer, index=False, sep=",")
+                        files = {"file": ("data.csv", clean_csv_buffer.getvalue(), "text/csv")}
+                        
                         resp = requests.post(predict_url, files=files, timeout=120)
                         resp.raise_for_status()
                         
                         batch_data = resp.json()
                         api_results = []
-                        if isinstance(batch_data, dict):
-                            api_results = batch_data.get("results", batch_data.get("predictions", []))
-                        elif isinstance(batch_data, list):
-                            api_results = batch_data
-
-                        # Copie exacte du dataframe original pour y ajouter uniquement les résultats
-                        df_results = df.copy()
                         
+                        # 3. AUTO-DÉCOUVERTE INTELLIGENTE DES RÉSULTATS (C'est ce qui causait les 5 erreurs !)
+                        if isinstance(batch_data, list):
+                            api_results = batch_data
+                        elif isinstance(batch_data, dict):
+                            # Cherche n'importe quelle liste qui correspond à la taille du dataframe
+                            for k, v in batch_data.items():
+                                if isinstance(v, list) and len(v) == len(df):
+                                    api_results = v
+                                    break
+                            # Fallback si taille différente
+                            if not api_results:
+                                for k, v in batch_data.items():
+                                    if isinstance(v, list):
+                                        api_results = v
+                                        break
+                        
+                        # Si le JSON ne contient aucune liste reconnaissable
+                        if not api_results:
+                            st.error("🚨 Le code a réussi à contacter l'API, mais la structure de la réponse est inconnue. Voici la réponse brute :")
+                            st.json(batch_data)
+                            st.stop()
+
+                        # 4. Fusion des résultats avec vos données
+                        df_results = df.copy()
                         preds, probs, classes, severities = [], [], [], []
 
-                        # Parcours synchronisé pour correspondre chaque ligne à son résultat
                         for i in range(len(df)):
                             if i < len(api_results):
                                 res = api_results[i]
-                                if st.session_state.selected_model == "binary":
-                                    is_disease = res.get("prediction_label") == "disease"
+                                
+                                # Si l'API retourne juste des valeurs brutes [1, 0, 1]
+                                if not isinstance(res, dict):
+                                    is_disease = str(res) in ["1", "disease", "true", "True"]
                                     preds.append("🔴 Malade" if is_disease else "🟢 Sain")
-                                    probs.append(round(res.get("probability_disease", 0.0) * 100, 2))
+                                    probs.append(None)
+                                    classes.append(res)
+                                    severities.append("Inconnue")
+                                    continue
+                                
+                                if st.session_state.selected_model == "binary":
+                                    is_disease = res.get("prediction_label") == "disease" or res.get("prediction") == 1
+                                    preds.append("🔴 Malade" if is_disease else "🟢 Sain")
+                                    prob_val = res.get("probability_disease", res.get("probability", 0.0))
+                                    probs.append(round(float(prob_val) * 100, 2) if prob_val is not None else None)
                                 else:
-                                    pred_class = res.get("prediction_code")
+                                    pred_class = res.get("prediction_code", res.get("prediction", 0))
                                     probs_list = res.get("probabilities", [])
-                                    prob_val = float(probs_list[pred_class]) if (pred_class is not None and len(probs_list) > pred_class) else 0.0
+                                    prob_val = float(probs_list[pred_class]) if (isinstance(probs_list, list) and len(probs_list) > pred_class) else res.get("probability", 0.0)
                                     classes.append(pred_class)
                                     severities.append(CLASS_LABELS_SHORT.get(pred_class, "Inconnue"))
-                                    probs.append(round(prob_val * 100, 2))
+                                    probs.append(round(float(prob_val) * 100, 2))
                             else:
-                                # Sécurité anti-crash si la réponse de l'API est tronquée
                                 preds.append("❌ Erreur")
-                                probs.append(None)
+                                probs.append(0.0)
                                 classes.append(None)
                                 severities.append("Erreur")
 
-                        # Ajout strict des colonnes de résultats à la fin du tableau
                         if st.session_state.selected_model == "binary":
                             df_results["Prédiction"] = preds
                             df_results["Probabilité (%)"] = probs
@@ -654,13 +540,21 @@ with tab2:
                             df_results["Confiance (%)"] = probs
 
                         st.success("✅ Traitement terminé avec succès !")
+                        
+                        # Statistiques visuelles
+                        malades = sum(1 for p in preds if "Malade" in str(p) or str(p) in ["1", "2", "3", "4"])
+                        erreurs = sum(1 for p in preds if "Erreur" in str(p))
+                        col_s1, col_s2, col_s3 = st.columns(3)
+                        with col_s1: st.metric("📊 Total traitées", len(df))
+                        with col_s2: st.metric("🔴 Détections Positives", malades)
+                        with col_s3: st.metric("❌ Erreurs", erreurs)
 
                         st.markdown("##### 📊 Résultats sur vos données")
                         st.dataframe(df_results, use_container_width=True)
 
-                        # Bouton de téléchargement du tableau fusionné (Données originales + Prédictions)
+                        # 5. Export Final utilisant EXACTEMENT votre séparateur d'origine détecté (;)
                         csv_buffer = io.StringIO()
-                        df_results.to_csv(csv_buffer, index=False, sep=";")
+                        df_results.to_csv(csv_buffer, index=False, sep=detected_sep)
                         
                         col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
                         with col_d2:
@@ -673,13 +567,9 @@ with tab2:
                             )
 
                     except Exception as exc:
-                        st.markdown(
-                            f'<div class="error-box">🚨 <b>Échec du traitement :</b> {html.escape(str(exc))}</div>',
-                            unsafe_allow_html=True
-                        )
+                        st.markdown(f'<div class="error-box">🚨 <b>Échec du traitement :</b> {html.escape(str(exc))}</div>', unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"Erreur de lecture du fichier : {e}")
-            
         finally:
             st.markdown("</div>", unsafe_allow_html=True)
