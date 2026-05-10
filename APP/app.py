@@ -7,6 +7,7 @@ import html
 import io
 import os
 import time
+import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
@@ -112,7 +113,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# 2. Configuration dynamique de l'API (Barre latérale)
+# 2. Configuration dynamique de l'API
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("## 🫀 CardioRisk")
@@ -120,20 +121,11 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("### 🔌 Connexion API")
-    st.caption("Modifiez l'URL ci-dessous si votre API FastApi est déployée ailleurs.")
+    api_url_input = st.text_input("Adresse de l'API :", value="https://cardiorisk-streamlit.onrender.com")
     
-    api_url_input = st.text_input(
-        "Adresse de l'API Backend :", 
-        value="https://cardiorisk-streamlit.onrender.com"
-    )
-    
-    # Nettoyage et sécurisation de l'URL
     API_BASE_URL = api_url_input.strip().rstrip("/")
     if not API_BASE_URL.startswith(("http://", "https://")):
-        if "localhost" in API_BASE_URL or "127.0.0.1" in API_BASE_URL:
-            API_BASE_URL = f"http://{API_BASE_URL}"
-        else:
-            API_BASE_URL = f"https://{API_BASE_URL}"
+        API_BASE_URL = f"https://{API_BASE_URL}"
 
     st.markdown("---")
     st.markdown("### ⚙️ Modèle")
@@ -144,16 +136,15 @@ with st.sidebar:
     )
     st.session_state.selected_model = "binary" if selected_model_label == "Binaire" else "multiclass"
 
-# Construction des adresses exactes
-PREDICT_BINARY_URL               = f"{API_BASE_URL}/predict/binary"
-PREDICT_MULTICLASS_URL           = f"{API_BASE_URL}/predict/multiclass"
-PREDICT_BINARY_BATCH_CSV_URL     = f"{API_BASE_URL}/predict/binary/batch/csv"
-PREDICT_MULTICLASS_BATCH_CSV_URL = f"{API_BASE_URL}/predict/multiclass/batch/csv"
+# Adresses de l'API (On utilise les requêtes JSON au lieu de CSV pour éviter le blocage de Render)
+PREDICT_BINARY_URL           = f"{API_BASE_URL}/predict/binary"
+PREDICT_MULTICLASS_URL       = f"{API_BASE_URL}/predict/multiclass"
+PREDICT_BINARY_BATCH_URL     = f"{API_BASE_URL}/predict/binary/batch"
+PREDICT_MULTICLASS_BATCH_URL = f"{API_BASE_URL}/predict/multiclass/batch"
 
 REQUIRED_COLS = ["age", "sex", "cp"]
 OPTIONAL_COLS_LIST = ["trestbps", "chol", "fbs", "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal"]
 ALL_EXPECTED_COLS = set(REQUIRED_COLS + OPTIONAL_COLS_LIST)
-
 CLASS_LABELS_SHORT = {0: "Pas de maladie", 1: "Légère", 2: "Modérée", 3: "Sévère", 4: "Très sévère"}
 
 # ---------------------------------------------------------------------------
@@ -200,7 +191,7 @@ with tab1:
         with col_btn2: submitted = st.form_submit_button("🔬 Prédiction Individuelle", use_container_width=True)
 
     if submitted:
-        payload = {"age": age, "sex": sex, "cp": cp, "trestbps": trestbps, "chol": chol, "fbs": fbs, "restecg": restecg, "thalach": thalach, "exang": exang, "oldpeak": oldpeak, "slope": slope, "ca": ca, "thal": thal}
+        payload = {"age": float(age), "sex": float(sex), "cp": float(cp), "trestbps": float(trestbps), "chol": float(chol), "fbs": float(fbs), "restecg": float(restecg), "thalach": float(thalach), "exang": float(exang), "oldpeak": float(oldpeak), "slope": float(slope), "ca": float(ca), "thal": float(thal)}
         predict_url = PREDICT_MULTICLASS_URL if st.session_state.selected_model == "multiclass" else PREDICT_BINARY_URL
 
         with st.spinner("Analyse en cours via l'API…"):
@@ -243,7 +234,7 @@ with tab1:
                 st.error(f"Impossible de joindre l'API : {e}")
 
 # ===========================================================================
-# TAB 2 — Prédiction en masse (Vrai Batch Processing, strict et fidèle)
+# TAB 2 — Prédiction en masse (NOUVELLE MÉTHODE SANS ENVOI DE FICHIER BRUT)
 # ===========================================================================
 with tab2:
     st.markdown('<div class="section-card"><div class="section-title">📥 1. Obtenir le Template</div>', unsafe_allow_html=True)
@@ -262,7 +253,7 @@ with tab2:
         try:
             # Lecture du fichier soumis par l'utilisateur
             raw_bytes = uploaded_file.getvalue()
-            csv_text = raw_bytes.decode("utf-8")
+            csv_text = raw_bytes.decode("utf-8-sig")
             detected_sep = ";" if ";" in csv_text.split('\n')[0] else ","
             df = pd.read_csv(io.StringIO(csv_text), sep=detected_sep)
             
@@ -280,38 +271,34 @@ with tab2:
                 predict_bulk = st.button("🚀 Lancer la prédiction en masse", use_container_width=True)
 
             if predict_bulk:
-                predict_url = PREDICT_MULTICLASS_BATCH_CSV_URL if st.session_state.selected_model == "multiclass" else PREDICT_BINARY_BATCH_CSV_URL
+                # ICI : On cible la route JSON standard, pas la route CSV qui cause l'Erreur 405
+                predict_url = PREDICT_MULTICLASS_BATCH_URL if st.session_state.selected_model == "multiclass" else PREDICT_BINARY_BATCH_URL
 
-                with st.spinner("Transmission sécurisée et traitement par l'API..."):
-                    # 1. Nettoyage du fichier pour l'API (virgules obligatoires)
-                    clean_csv_buffer = io.StringIO()
-                    df.to_csv(clean_csv_buffer, index=False, sep=",")
+                with st.spinner("Formatage des données et traitement par l'API..."):
                     
-                    # ENCODAGE BRUT POUR L'API (TRÈS IMPORTANT)
-                    csv_bytes = clean_csv_buffer.getvalue().encode('utf-8')
-                    files = {"file": ("data.csv", csv_bytes, "text/csv")}
+                    # 1. On formate les données de l'interface vers du JSON pur
+                    df_json = df.copy()
+                    df_json = df_json.astype(float) # Conversion garantie
+                    df_json = df_json.replace({np.nan: None}) # Le format JSON n'aime pas le "NaN"
+                    patients_payload = df_json.to_dict(orient="records")
+                    
+                    payload = {"patients": patients_payload}
                     
                     try:
-                        resp = requests.post(predict_url, files=files, timeout=60)
+                        resp = requests.post(predict_url, json=payload, timeout=60)
                         
-                        # ANTI-CRASH SILENCIEUX : Arrêt total si l'API refuse le fichier
+                        # ANTI-CRASH SILENCIEUX
                         if resp.status_code != 200:
                             st.error(f"🚨 L'API a refusé de traiter la requête (Erreur HTTP {resp.status_code}).")
                             st.info("💡 Vérifiez que l'adresse de l'API dans la barre à gauche est bien la bonne.")
                             st.code(f"URL ciblée : {predict_url}\n\nMessage du Serveur :\n{resp.text}")
-                            st.stop() # Bloque l'apparition du tableau plein d'erreurs
+                            st.stop() 
                             
                         # Si le code 200 est reçu, on extrait les prédictions
                         batch_data = resp.json()
                         api_results = batch_data.get("predictions", [])
                         
-                        # Double sécurité : si la liste est vide
-                        if not api_results or len(api_results) != len(df):
-                            st.error(f"🚨 Format de réponse inattendu. L'API a renvoyé {len(api_results)} résultats pour {len(df)} patients.")
-                            st.json(batch_data)
-                            st.stop()
-
-                        # Ajout des résultats aux données
+                        # Ajout des résultats aux données d'origine
                         df_results = df.copy()
                         preds, probs, classes, severities = [], [], [], []
 
@@ -358,7 +345,6 @@ with tab2:
 
                     except requests.exceptions.ConnectionError:
                         st.error(f"🚨 Serveur API injoignable à l'adresse : {predict_url}")
-                        st.info("Vérifiez l'URL dans la barre latérale gauche.")
                         st.stop()
                     except Exception as exc:
                         st.error(f"🚨 Échec critique du traitement : {html.escape(str(exc))}")
