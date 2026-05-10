@@ -815,23 +815,7 @@ with tab2:
             # [C2] Détection automatique du séparateur (virgule ou point-virgule)
             df = pd.read_csv(uploaded_file, sep=None, engine="python")
 
-            st.markdown(
-                '<div class="section-card">'
-                '<div class="section-title">📋 Aperçu des données</div>',
-                unsafe_allow_html=True,
-            )
-            st.write(f"**Nombre de lignes :** {len(df)}")
-            st.write(f"**Colonnes trouvées :** {list(df.columns)}")
-            st.dataframe(df.head(10), use_container_width=True)
-            
-            # Vérifier les colonnes manquantes (optionnelles)
-            missing_optional = [c for c in OPTIONAL_COLS_LIST if c not in df.columns]
-            if missing_optional:
-                st.info(f"ℹ️ Colonnes optionnelles manquantes : {', '.join(missing_optional)}. "
-                        f"Elles seront traitées comme valeurs manquantes (None).")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-
+            # Vérifier les colonnes requises EN PREMIER
             missing_cols = [c for c in REQUIRED_COLS if c not in df.columns]
 
             if missing_cols:
@@ -839,182 +823,229 @@ with tab2:
                     f'<div class="error-box">❌ <b>Colonnes requises manquantes :</b> {", ".join(missing_cols)}</div>',
                     unsafe_allow_html=True,
                 )
-            else:
-                # Avertissement pour colonnes inattendues (non requises et non optionnelles)
-                unexpected_cols = [c for c in df.columns if c not in ALL_EXPECTED_COLS]
-                if unexpected_cols:
-                    st.warning(f"⚠️ Colonnes inattendues qui seront ignorées : {', '.join(unexpected_cols)}")
-                
-                # [C3] Garde contre ZeroDivisionError si fichier vide
-                total_rows = len(df)
-                if total_rows == 0:
-                    st.warning("⚠️ Le fichier CSV est vide — aucune ligne à traiter.")
+                st.stop()
+            
+            # Afficher l'aperçu des données chargées
+            st.markdown(
+                '<div class="section-card">'
+                '<div class="section-title">✅ Fichier chargé avec succès</div>',
+                unsafe_allow_html=True,
+            )
+            
+            st.write(f"**Nombre de lignes détectées :** `{len(df)}`")
+            st.write(f"**Colonnes détectées :** `{len(df.columns)}`")
+            
+            # Afficher les colonnes trouvées
+            cols_found = list(df.columns)
+            cols_ok = [c for c in cols_found if c in ALL_EXPECTED_COLS]
+            cols_unexpected = [c for c in cols_found if c not in ALL_EXPECTED_COLS]
+            
+            col_info1, col_info2 = st.columns(2)
+            with col_info1:
+                st.write(f"✅ **Colonnes valides :** {len(cols_ok)}")
+                st.caption(f"Parmi les {len(cols_found)} trouvées")
+            with col_info2:
+                if cols_unexpected:
+                    st.write(f"⚠️ **Colonnes inattendues :** {len(cols_unexpected)}")
+                    st.caption(f"{', '.join(cols_unexpected[:3])}{'...' if len(cols_unexpected) > 3 else ''}")
                 else:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    col_b1, col_b2, col_b3 = st.columns([2, 1, 2])
-                    with col_b2:
-                        predict_bulk = st.button(
-                            "🚀 Prédire", use_container_width=True, key="bulk_predict_btn"
-                        )
+                    st.write(f"✅ **Aucune colonne inattendue**")
+                    st.caption("Toutes les colonnes sont valides")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Afficher un aperçu du contenu du fichier
+            st.markdown(
+                '<div class="section-card">'
+                '<div class="section-title">📋 Aperçu des données</div>',
+                unsafe_allow_html=True,
+            )
+            st.dataframe(df.head(10), use_container_width=True, hide_index=False)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Vérifier les colonnes manquantes (optionnelles)
+            missing_optional = [c for c in OPTIONAL_COLS_LIST if c not in df.columns]
+            if missing_optional:
+                st.info(f"ℹ️ Colonnes optionnelles manquantes : `{', '.join(missing_optional)}`. "
+                        f"Elles seront traitées comme valeurs manquantes (None).")
+            
+            # Avertissement pour colonnes inattendues
+            if cols_unexpected:
+                st.warning(f"⚠️ Colonnes inattendues qui seront ignorées : `{', '.join(cols_unexpected)}`")
+            
+            # [C3] Garde contre ZeroDivisionError si fichier vide
+            total_rows = len(df)
+            if total_rows == 0:
+                st.warning("⚠️ Le fichier CSV est vide — aucune ligne à traiter.")
+                st.stop()
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Bouton de prédiction
+            col_b1, col_b2, col_b3 = st.columns([2, 1, 2])
+            with col_b2:
+                predict_bulk = st.button(
+                    "🚀 Lancer la prédiction", use_container_width=True, key="bulk_predict_btn"
+                )
 
-                    if predict_bulk:
-                        predict_url = (
-                            PREDICT_MULTICLASS_URL
-                            if st.session_state.selected_model == "multiclass"
-                            else PREDICT_BINARY_URL
-                        )
+            if predict_bulk:
+                predict_url = (
+                    PREDICT_MULTICLASS_URL
+                    if st.session_state.selected_model == "multiclass"
+                    else PREDICT_BINARY_URL
+                )
 
-                        st.markdown(
-                            '<div class="section-card">'
-                            '<div class="section-title">⏳ Traitement en cours…</div>',
-                            unsafe_allow_html=True,
-                        )
+                st.markdown(
+                    '<div class="section-card">'
+                    '<div class="section-title">⏳ Traitement en cours…</div>',
+                    unsafe_allow_html=True,
+                )
 
-                        progress_bar  = st.progress(0)
-                        status_text   = st.empty()
-                        results       = [None] * total_rows
-                        completed_cnt = 0
+                progress_bar  = st.progress(0)
+                status_text   = st.empty()
+                results       = [None] * total_rows
+                completed_cnt = 0
 
-                        def _predict_row(args):
-                            """Fonction worker pour le pool de threads."""
-                            row_idx, row = args
-                            try:
-                                api_result = predict_single_row(predict_url, row)
+                def _predict_row(args):
+                    """Fonction worker pour le pool de threads."""
+                    row_idx, row = args
+                    try:
+                        api_result = predict_single_row(predict_url, row)
 
-                                if st.session_state.selected_model == "binary":
-                                    is_dis = api_result.get("prediction_label") == "disease"
-                                    return row_idx, {
-                                        "Index":           row_idx + 1,
-                                        **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
-                                        # [C4] champ "status" séparé pour comptage fiable
-                                        "status":          "disease" if is_dis else "healthy",
-                                        "Prédiction":      "🔴 Malade" if is_dis else "🟢 Sain",
-                                        "Probabilité (%)": round(api_result.get("probability_disease", 0) * 100, 2),
-                                        "Confiance":       round(api_result.get("probability_disease", 0), 4),
-                                    }
-                                else:
-                                    # [C9] Champ correct : "prediction_code"
-                                    pred_class = api_result.get("prediction_code")
-
-                                    # [C10] probabilities est une liste, accès par index
-                                    probs_list = api_result.get("probabilities", [])
-                                    prob_value = (
-                                        float(probs_list[pred_class])
-                                        if (pred_class is not None
-                                            and isinstance(probs_list, list)
-                                            and len(probs_list) > pred_class)
-                                        else 0.0
-                                    )
-                                    return row_idx, {
-                                        "Index":         row_idx + 1,
-                                        **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
-                                        "status":        "ok" if pred_class is not None else "error",
-                                        "Classe":        pred_class,
-                                        "Sévérité":      CLASS_LABELS_SHORT.get(pred_class, "Inconnue"),
-                                        "Confiance (%)": round(prob_value * 100, 2),
-                                        "Confiance":     round(prob_value, 4),
-                                    }
-
-                            except Exception as exc:
-                                return row_idx, {
-                                    "Index":           row_idx + 1,
-                                    **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
-                                    "status":          "error",
-                                    "Prédiction":      "❌ Erreur",
-                                    "Probabilité (%)": None,
-                                    "Confiance":       None,
-                                    "_error":          str(exc),
-                                }
-
-                        rows_iter = list(df.iterrows())
-
-                        # [C6] Requêtes parallèles via ThreadPoolExecutor
-                        with ThreadPoolExecutor(max_workers=8) as executor:
-                            futures = {
-                                executor.submit(_predict_row, (idx, row)): idx
-                                for idx, row in rows_iter
-                            }
-                            for future in as_completed(futures):
-                                row_idx, result_row = future.result()
-                                results[row_idx] = result_row
-                                completed_cnt += 1
-                                progress_bar.progress(completed_cnt / total_rows)
-                                status_text.text(
-                                    f"Traitement : {completed_cnt}/{total_rows} lignes"
-                                )
-
-                        st.markdown("</div>", unsafe_allow_html=True)
-
-                        # ── Résultats ────────────────────────────────────
-                        results_df = pd.DataFrame(results)
-
-                        st.markdown(
-                            '<div class="section-card">'
-                            '<div class="section-title">📊 Résultats des prédictions</div>',
-                            unsafe_allow_html=True,
-                        )
-                        st.dataframe(results_df, use_container_width=True, hide_index=True)
-
-                        # ── Statistiques ─────────────────────────────────
-                        # [C4] Comptage via champ "status" (sans emoji)
                         if st.session_state.selected_model == "binary":
-                            malade_count = sum(1 for r in results if r and r.get("status") == "disease")
-                            sain_count   = sum(1 for r in results if r and r.get("status") == "healthy")
-                            erreur_count = sum(1 for r in results if r and r.get("status") == "error")
-
-                            col_s1, col_s2, col_s3 = st.columns(3)
-                            with col_s1:
-                                st.metric("🔴 Malades", malade_count, f"{round(100 * malade_count / total_rows, 1)}%")
-                            with col_s2:
-                                st.metric("🟢 Sains", sain_count, f"{round(100 * sain_count / total_rows, 1)}%")
-                            with col_s3:
-                                st.metric("❌ Erreurs", erreur_count)
+                            is_dis = api_result.get("prediction_label") == "disease"
+                            return row_idx, {
+                                "Index":           row_idx + 1,
+                                **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
+                                # [C4] champ "status" séparé pour comptage fiable
+                                "status":          "disease" if is_dis else "healthy",
+                                "Prédiction":      "🔴 Malade" if is_dis else "🟢 Sain",
+                                "Probabilité (%)": round(api_result.get("probability_disease", 0) * 100, 2),
+                                "Confiance":       round(api_result.get("probability_disease", 0), 4),
+                            }
                         else:
-                            class_counts: dict = {}
-                            for r in results:
-                                if r is None:
-                                    continue
-                                cl = r.get("Classe")
-                                if cl is not None:
-                                    class_counts[cl] = class_counts.get(cl, 0) + 1
+                            # [C9] Champ correct : "prediction_code"
+                            pred_class = api_result.get("prediction_code")
 
-                            col_s1, col_s2 = st.columns(2)
-                            with col_s1:
-                                st.markdown("**Distribution par classe :**")
-                                for cl in sorted(class_counts.keys()):
-                                    count = class_counts[cl]
-                                    pct   = round(100 * count / total_rows, 1)
-                                    st.write(
-                                        f"Classe {cl} ({CLASS_LABELS_SHORT.get(cl, 'Inconnue')}) : "
-                                        f"{count} patients ({pct}%)"
-                                    )
-                            with col_s2:
-                                st.markdown("**Statistiques générales :**")
-                                st.metric("📊 Total traitées", total_rows)
-                                erreur_count = sum(1 for r in results if r and r.get("status") == "error")
-                                st.metric("❌ Erreurs", erreur_count)
+                            # [C10] probabilities est une liste, accès par index
+                            probs_list = api_result.get("probabilities", [])
+                            prob_value = (
+                                float(probs_list[pred_class])
+                                if (pred_class is not None
+                                    and isinstance(probs_list, list)
+                                    and len(probs_list) > pred_class)
+                                else 0.0
+                            )
+                            return row_idx, {
+                                "Index":         row_idx + 1,
+                                **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
+                                "status":        "ok" if pred_class is not None else "error",
+                                "Classe":        pred_class,
+                                "Sévérité":      CLASS_LABELS_SHORT.get(pred_class, "Inconnue"),
+                                "Confiance (%)": round(prob_value * 100, 2),
+                                "Confiance":     round(prob_value, 4),
+                            }
 
-                        st.markdown("</div>", unsafe_allow_html=True)
+                    except Exception as exc:
+                        return row_idx, {
+                            "Index":           row_idx + 1,
+                            **{c: (row[c] if c in row.index else None) for c in ALL_EXPECTED_COLS},
+                            "status":          "error",
+                            "Prédiction":      "❌ Erreur",
+                            "Probabilité (%)": None,
+                            "Confiance":       None,
+                            "_error":          str(exc),
+                        }
 
-                        # ── Téléchargement ───────────────────────────────
-                        st.markdown(
-                            '<div class="section-card">'
-                            '<div class="section-title">💾 Télécharger les résultats</div>',
-                            unsafe_allow_html=True,
+                rows_iter = list(df.iterrows())
+
+                # [C6] Requêtes parallèles via ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = {
+                        executor.submit(_predict_row, (idx, row)): idx
+                        for idx, row in rows_iter
+                    }
+                    for future in as_completed(futures):
+                        row_idx, result_row = future.result()
+                        results[row_idx] = result_row
+                        completed_cnt += 1
+                        progress_bar.progress(completed_cnt / total_rows)
+                        status_text.text(
+                            f"Traitement : {completed_cnt}/{total_rows} lignes"
                         )
-                        csv_buffer = io.StringIO()
-                        # Exclure les colonnes techniques "status" et "_error" de l'export
-                        export_cols = [c for c in results_df.columns if c not in ("status", "_error")]
-                        results_df[export_cols].to_csv(csv_buffer, index=False)
 
-                        st.download_button(
-                            label="📥 Télécharger en CSV",
-                            data=csv_buffer.getvalue(),
-                            file_name="predictions_results.csv",
-                            mime="text/csv",
-                            use_container_width=True,
-                        )
-                        st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # ── Résultats ────────────────────────────────────
+                results_df = pd.DataFrame(results)
+
+                st.markdown(
+                    '<div class="section-card">'
+                    '<div class="section-title">📊 Résultats des prédictions</div>',
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+
+                # ── Statistiques ─────────────────────────────────
+                # [C4] Comptage via champ "status" (sans emoji)
+                if st.session_state.selected_model == "binary":
+                    malade_count = sum(1 for r in results if r and r.get("status") == "disease")
+                    sain_count   = sum(1 for r in results if r and r.get("status") == "healthy")
+                    erreur_count = sum(1 for r in results if r and r.get("status") == "error")
+
+                    col_s1, col_s2, col_s3 = st.columns(3)
+                    with col_s1:
+                        st.metric("🔴 Malades", malade_count, f"{round(100 * malade_count / total_rows, 1)}%")
+                    with col_s2:
+                        st.metric("🟢 Sains", sain_count, f"{round(100 * sain_count / total_rows, 1)}%")
+                    with col_s3:
+                        st.metric("❌ Erreurs", erreur_count)
+                else:
+                    class_counts: dict = {}
+                    for r in results:
+                        if r is None:
+                            continue
+                        cl = r.get("Classe")
+                        if cl is not None:
+                            class_counts[cl] = class_counts.get(cl, 0) + 1
+
+                    col_s1, col_s2 = st.columns(2)
+                    with col_s1:
+                        st.markdown("**Distribution par classe :**")
+                        for cl in sorted(class_counts.keys()):
+                            count = class_counts[cl]
+                            pct   = round(100 * count / total_rows, 1)
+                            st.write(
+                                f"Classe {cl} ({CLASS_LABELS_SHORT.get(cl, 'Inconnue')}) : "
+                                f"{count} patients ({pct}%)"
+                            )
+                    with col_s2:
+                        st.markdown("**Statistiques générales :**")
+                        st.metric("📊 Total traitées", total_rows)
+                        erreur_count = sum(1 for r in results if r and r.get("status") == "error")
+                        st.metric("❌ Erreurs", erreur_count)
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # ── Téléchargement ───────────────────────────────
+                st.markdown(
+                    '<div class="section-card">'
+                    '<div class="section-title">💾 Télécharger les résultats</div>',
+                    unsafe_allow_html=True,
+                )
+                csv_buffer = io.StringIO()
+                # Exclure les colonnes techniques "status" et "_error" de l'export
+                export_cols = [c for c in results_df.columns if c not in ("status", "_error")]
+                results_df[export_cols].to_csv(csv_buffer, index=False)
+
+                st.download_button(
+                    label="📥 Télécharger en CSV",
+                    data=csv_buffer.getvalue(),
+                    file_name="predictions_results.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
 
         except pd.errors.ParserError:
             st.markdown(
