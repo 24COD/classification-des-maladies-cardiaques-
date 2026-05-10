@@ -216,13 +216,12 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# 2. Constantes API (CORRIGÉ : FORCE HTTPS)
+# 2. Constantes API (SÉCURITÉ HTTPS FORCÉE POUR ÉVITER LES ERREURS)
 # ---------------------------------------------------------------------------
-# URL par défaut sécurisée pour éviter les redirections 301
 DEFAULT_API = "https://classification-des-maladies-cardiaques-1-zbq3.onrender.com"
 API_BASE_URL = os.getenv("API_BASE_URL", DEFAULT_API).strip().rstrip("/")
 
-# Sécurité : On s'assure que si vous n'êtes pas en local, HTTPS est obligatoire
+# On s'assure d'utiliser https:// pour éviter que le serveur bloque les requêtes
 if not API_BASE_URL.startswith(("http://", "https://")):
     if "localhost" in API_BASE_URL or "127.0.0.1" in API_BASE_URL:
         API_BASE_URL = f"http://{API_BASE_URL}"
@@ -236,14 +235,12 @@ PREDICT_MULTICLASS_BATCH_CSV_URL = f"{API_BASE_URL}/predict/multiclass/batch/csv
 
 API_TIMEOUT   = 60
 API_MAX_RETRY = 1
-API_FALLBACK_STATUS_CODES = {502, 503, 504}
 
 REQUIRED_COLS = ["age", "sex", "cp"]
 OPTIONAL_COLS_LIST = [
     "trestbps", "chol", "fbs", "restecg", "thalach",
     "exang", "oldpeak", "slope", "ca", "thal"
 ]
-
 ALL_EXPECTED_COLS = set(REQUIRED_COLS + OPTIONAL_COLS_LIST)
 
 CLASS_LABELS = {
@@ -287,17 +284,13 @@ def call_api(url: str, payload: dict) -> dict:
 def validate_clinical(payload: dict) -> list:
     warnings_list = []
     age = payload.get("age")
-    if age is not None and (age < 20 or age > 100):
-        warnings_list.append(f"Âge hors plage habituelle ({int(age)} ans).")
+    if age is not None and (age < 20 or age > 100): warnings_list.append(f"Âge hors plage habituelle ({int(age)} ans).")
     trestbps = payload.get("trestbps")
-    if trestbps is not None and trestbps > 0 and trestbps < 60:
-        warnings_list.append("Tension artérielle très basse (<60 mmHg).")
+    if trestbps is not None and trestbps > 0 and trestbps < 60: warnings_list.append("Tension artérielle très basse (<60 mmHg).")
     chol = payload.get("chol")
-    if chol is not None and chol > 0 and chol < 100:
-        warnings_list.append("Cholestérol très bas (<100 mg/dl).")
+    if chol is not None and chol > 0 and chol < 100: warnings_list.append("Cholestérol très bas (<100 mg/dl).")
     thalach = payload.get("thalach")
-    if thalach is not None and thalach > 0 and thalach < 40:
-        warnings_list.append("Fréquence cardiaque max très basse (<40 bpm).")
+    if thalach is not None and thalach > 0 and thalach < 40: warnings_list.append("Fréquence max très basse (<40 bpm).")
     return warnings_list
 
 # ---------------------------------------------------------------------------
@@ -311,7 +304,6 @@ with st.sidebar:
     st.markdown("**Système d'aide à la décision clinique**")
     st.markdown("---")
 
-    st.markdown("### ⚙️ Sélection du modèle")
     selected_model_label = st.radio(
         "Choisir le modèle de prédiction :",
         options=["Binaire", "Multiclasse"],
@@ -326,7 +318,6 @@ with st.sidebar:
         st.markdown('<div class="info-pill">📊 <b>Multiclasse</b> — Sévérité 0–4</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### Endpoint actif")
     endpoint_display = "/predict/binary" if st.session_state.selected_model == "binary" else "/predict/multiclass"
     st.code(f"POST {endpoint_display}", language="bash")
 
@@ -334,11 +325,7 @@ with st.sidebar:
 # 5. En-tête principal
 # ---------------------------------------------------------------------------
 st.markdown("<h1>Prédiction du Risque Cardiaque</h1>", unsafe_allow_html=True)
-st.markdown(
-    "<p style='color:#475569; font-size:1rem; margin-top:-0.5rem; margin-bottom:1.5rem;'>"
-    "Évaluation avancée du risque cardiovasculaire selon les données cliniques."
-    "</p>", unsafe_allow_html=True
-)
+st.markdown("<p style='color:#475569; font-size:1rem; margin-top:-0.5rem; margin-bottom:1.5rem;'>Évaluation avancée du risque cardiovasculaire selon les données cliniques.</p>", unsafe_allow_html=True)
 st.markdown('<hr class="styled-hr">', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
@@ -386,7 +373,6 @@ with tab1:
 
     if submitted:
         payload = {"age": float(age), "sex": float(sex), "cp": float(cp), "trestbps": float(trestbps), "chol": float(chol), "fbs": float(fbs), "restecg": float(restecg), "thalach": float(thalach), "exang": float(exang), "oldpeak": float(oldpeak), "slope": float(slope), "ca": float(ca), "thal": float(thal)}
-
         predict_url = PREDICT_MULTICLASS_URL if st.session_state.selected_model == "multiclass" else PREDICT_BINARY_URL
 
         with st.spinner("Analyse en cours via l'API…"):
@@ -426,12 +412,12 @@ with tab1:
                 st.error(f"Erreur de communication API: {e}")
 
 # ===========================================================================
-# TAB 2 — Prédiction en masse (Vrai Batch Processing, strict et fidèle)
+# TAB 2 — Prédiction en masse (MÉTHODE BATCH)
 # ===========================================================================
 with tab2:
     st.markdown('<div class="section-card"><div class="section-title">📥 1. Obtenir le Template</div>', unsafe_allow_html=True)
     template_df = pd.DataFrame([[63, 1, 1, 145, 233, 1, 2, 150, 0, 2.3, 3, 0, 6]], columns=list(ALL_EXPECTED_COLS))
-    template_csv = template_df.to_csv(index=False, sep=";") # Votre séparateur par défaut
+    template_csv = template_df.to_csv(index=False, sep=";") # Séparateur par défaut
 
     col_t1, col_t2 = st.columns([1, 2])
     with col_t1:
@@ -450,7 +436,6 @@ with tab2:
             detected_sep = ";" if ";" in csv_text.split('\n')[0] else ","
             
             df = pd.read_csv(io.StringIO(csv_text), sep=detected_sep)
-            
             missing_cols = [c for c in REQUIRED_COLS if c not in df.columns]
             if missing_cols:
                 st.error(f"❌ Colonnes obligatoires manquantes : {', '.join(missing_cols)}")
@@ -458,8 +443,8 @@ with tab2:
 
             st.markdown("##### 📋 Données chargées prêtes pour l'analyse")
             st.dataframe(df, use_container_width=True)
-
             st.markdown("<br>", unsafe_allow_html=True)
+
             col_b1, col_b2, col_b3 = st.columns([2, 1, 2])
             with col_b2:
                 predict_bulk = st.button("🚀 Lancer la prédiction en masse", use_container_width=True)
@@ -503,7 +488,6 @@ with tab2:
                         for i in range(len(df)):
                             if i < len(api_results):
                                 res = api_results[i]
-                                
                                 if not isinstance(res, dict):
                                     is_disease = str(res) in ["1", "disease", "true", "True"]
                                     preds.append("🔴 Malade" if is_disease else "🟢 Sain")
@@ -525,7 +509,46 @@ with tab2:
                                     severities.append(CLASS_LABELS_SHORT.get(pred_class, "Inconnue"))
                                     probs.append(round(float(prob_val) * 100, 2))
                             else:
-                                preds.append("❌ Erreur")
-                                probs.append(0.0)
+                                preds.append("❌ Erreur API")
+                                probs.append(None)
                                 classes.append(None)
-                                severities.append("
+                                severities.append("Erreur API")
+
+                        if st.session_state.selected_model == "binary":
+                            df_results["Prédiction"] = preds
+                            df_results["Probabilité (%)"] = probs
+                        else:
+                            df_results["Classe Prédite"] = classes
+                            df_results["Sévérité"] = severities
+                            df_results["Confiance (%)"] = probs
+
+                        st.success("✅ Traitement terminé avec succès !")
+                        
+                        malades = sum(1 for p in preds if "Malade" in str(p) or str(p) in ["1", "2", "3", "4"])
+                        erreurs = sum(1 for p in preds if "Erreur" in str(p))
+                        col_s1, col_s2, col_s3 = st.columns(3)
+                        with col_s1: st.metric("📊 Total traitées", len(df))
+                        with col_s2: st.metric("🔴 Détections Positives", malades)
+                        with col_s3: st.metric("❌ Erreurs", erreurs)
+
+                        st.markdown("##### 📊 Résultats sur vos données")
+                        st.dataframe(df_results, use_container_width=True)
+
+                        csv_buffer = io.StringIO()
+                        df_results.to_csv(csv_buffer, index=False, sep=detected_sep)
+                        
+                        col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
+                        with col_d2:
+                            st.download_button(
+                                label="💾 Télécharger les résultats complets (CSV)",
+                                data=csv_buffer.getvalue(),
+                                file_name="predictions_masse_resultats.csv",
+                                mime="text/csv",
+                                use_container_width=True,
+                            )
+
+                    except Exception as exc:
+                        st.markdown(f'<div class="error-box">🚨 <b>Échec du traitement :</b> {html.escape(str(exc))}</div>', unsafe_allow_html=True)
+
+        except Exception as e:
+            st.error(f"Erreur de lecture du fichier : {e}")
