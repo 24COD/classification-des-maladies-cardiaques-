@@ -216,13 +216,21 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# 2. Constantes API
+# 2. Constantes API (CORRIGÉ : FORCE HTTPS)
 # ---------------------------------------------------------------------------
-API_BASE_URL           = os.getenv("API_BASE_URL", "http://localhost:8000").strip().rstrip("/")
+# URL par défaut sécurisée pour éviter les redirections 301
+DEFAULT_API = "https://classification-des-maladies-cardiaques-1-zbq3.onrender.com"
+API_BASE_URL = os.getenv("API_BASE_URL", DEFAULT_API).strip().rstrip("/")
+
+# Sécurité : On s'assure que si vous n'êtes pas en local, HTTPS est obligatoire
 if not API_BASE_URL.startswith(("http://", "https://")):
-    API_BASE_URL = f"http://{API_BASE_URL}"
-PREDICT_BINARY_URL     = f"{API_BASE_URL}/predict/binary"
-PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
+    if "localhost" in API_BASE_URL or "127.0.0.1" in API_BASE_URL:
+        API_BASE_URL = f"http://{API_BASE_URL}"
+    else:
+        API_BASE_URL = f"https://{API_BASE_URL}"
+
+PREDICT_BINARY_URL               = f"{API_BASE_URL}/predict/binary"
+PREDICT_MULTICLASS_URL           = f"{API_BASE_URL}/predict/multiclass"
 PREDICT_BINARY_BATCH_CSV_URL     = f"{API_BASE_URL}/predict/binary/batch/csv"
 PREDICT_MULTICLASS_BATCH_CSV_URL = f"{API_BASE_URL}/predict/multiclass/batch/csv"
 
@@ -437,10 +445,8 @@ with tab2:
 
     if uploaded_file is not None:
         try:
-            # 1. Lecture intelligente pour conserver EXACTEMENT votre séparateur d'origine
             raw_bytes = uploaded_file.getvalue()
             csv_text = raw_bytes.decode("utf-8")
-            # Détection de votre séparateur (;)
             detected_sep = ";" if ";" in csv_text.split('\n')[0] else ","
             
             df = pd.read_csv(io.StringIO(csv_text), sep=detected_sep)
@@ -463,7 +469,6 @@ with tab2:
 
                 with st.spinner("Transmission sécurisée et traitement par l'API..."):
                     try:
-                        # 2. On formate proprement en virgule (,) JUSTE pour l'API pour éviter les crashs côté Backend
                         clean_csv_buffer = io.StringIO()
                         df.to_csv(clean_csv_buffer, index=False, sep=",")
                         files = {"file": ("data.csv", clean_csv_buffer.getvalue(), "text/csv")}
@@ -474,29 +479,24 @@ with tab2:
                         batch_data = resp.json()
                         api_results = []
                         
-                        # 3. AUTO-DÉCOUVERTE INTELLIGENTE DES RÉSULTATS (C'est ce qui causait les 5 erreurs !)
                         if isinstance(batch_data, list):
                             api_results = batch_data
                         elif isinstance(batch_data, dict):
-                            # Cherche n'importe quelle liste qui correspond à la taille du dataframe
                             for k, v in batch_data.items():
                                 if isinstance(v, list) and len(v) == len(df):
                                     api_results = v
                                     break
-                            # Fallback si taille différente
                             if not api_results:
                                 for k, v in batch_data.items():
                                     if isinstance(v, list):
                                         api_results = v
                                         break
                         
-                        # Si le JSON ne contient aucune liste reconnaissable
                         if not api_results:
-                            st.error("🚨 Le code a réussi à contacter l'API, mais la structure de la réponse est inconnue. Voici la réponse brute :")
+                            st.error("🚨 L'API a répondu, mais la structure des données est inconnue. Voici la réponse brute :")
                             st.json(batch_data)
                             st.stop()
 
-                        # 4. Fusion des résultats avec vos données
                         df_results = df.copy()
                         preds, probs, classes, severities = [], [], [], []
 
@@ -504,7 +504,6 @@ with tab2:
                             if i < len(api_results):
                                 res = api_results[i]
                                 
-                                # Si l'API retourne juste des valeurs brutes [1, 0, 1]
                                 if not isinstance(res, dict):
                                     is_disease = str(res) in ["1", "disease", "true", "True"]
                                     preds.append("🔴 Malade" if is_disease else "🟢 Sain")
@@ -529,47 +528,4 @@ with tab2:
                                 preds.append("❌ Erreur")
                                 probs.append(0.0)
                                 classes.append(None)
-                                severities.append("Erreur")
-
-                        if st.session_state.selected_model == "binary":
-                            df_results["Prédiction"] = preds
-                            df_results["Probabilité (%)"] = probs
-                        else:
-                            df_results["Classe Prédite"] = classes
-                            df_results["Sévérité"] = severities
-                            df_results["Confiance (%)"] = probs
-
-                        st.success("✅ Traitement terminé avec succès !")
-                        
-                        # Statistiques visuelles
-                        malades = sum(1 for p in preds if "Malade" in str(p) or str(p) in ["1", "2", "3", "4"])
-                        erreurs = sum(1 for p in preds if "Erreur" in str(p))
-                        col_s1, col_s2, col_s3 = st.columns(3)
-                        with col_s1: st.metric("📊 Total traitées", len(df))
-                        with col_s2: st.metric("🔴 Détections Positives", malades)
-                        with col_s3: st.metric("❌ Erreurs", erreurs)
-
-                        st.markdown("##### 📊 Résultats sur vos données")
-                        st.dataframe(df_results, use_container_width=True)
-
-                        # 5. Export Final utilisant EXACTEMENT votre séparateur d'origine détecté (;)
-                        csv_buffer = io.StringIO()
-                        df_results.to_csv(csv_buffer, index=False, sep=detected_sep)
-                        
-                        col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
-                        with col_d2:
-                            st.download_button(
-                                label="💾 Télécharger les résultats complets (CSV)",
-                                data=csv_buffer.getvalue(),
-                                file_name="predictions_masse_resultats.csv",
-                                mime="text/csv",
-                                use_container_width=True,
-                            )
-
-                    except Exception as exc:
-                        st.markdown(f'<div class="error-box">🚨 <b>Échec du traitement :</b> {html.escape(str(exc))}</div>', unsafe_allow_html=True)
-
-        except Exception as e:
-            st.error(f"Erreur de lecture du fichier : {e}")
-        finally:
-            st.markdown("</div>", unsafe_allow_html=True)
+                                severities.append("
