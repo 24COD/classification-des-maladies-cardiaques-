@@ -10,22 +10,14 @@ CORRECTIONS APPLIQUÉES :
   [C3] Garde ZeroDivisionError si fichier vide.
   [C4] Comptage erreurs via champ "status" (sans dépendre des emojis).
   [C5] Timeout porté à 60s + retry automatique 1 fois.
-  [C6] Requêtes en masse parallèles (ThreadPoolExecutor, max 8 workers).
-  [C7] Encodage html.escape() sur response.text pour éviter XSS.
-  [C8] Validation clinique légère avec avertissements non bloquants.
-  [C9] CORRECTION CRITIQUE : le champ API multiclasse s'appelle "prediction_code",
-       pas "prediction_class" — corrigé partout (individuel + batch).
-  [C10] CORRECTION CRITIQUE : "probabilities" est une liste (List[float]) dans la
-        réponse API, pas un dict — toute la logique de lecture des probs est corrigée
-        (on accède par index, pas par clé str).
-  [C11] validate_clinical : protection contre les valeurs None (champs optionnels)
-        avant les comparaisons numériques.
-  [C12] predict_single_row : conversion NaN → None pour les champs optionnels du CSV.
+  [C13] NOUVELLE APPROCHE : Envoi direct du fichier CSV à l'API via /batch/csv endpoints
+        au lieu d'envoyer ligne par ligne. Plus robuste et efficace.
 """
 
 import html
 import io
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
@@ -241,6 +233,8 @@ if not API_BASE_URL.startswith(("http://", "https://")):
     API_BASE_URL = f"http://{API_BASE_URL}"
 PREDICT_BINARY_URL     = f"{API_BASE_URL}/predict/binary"
 PREDICT_MULTICLASS_URL = f"{API_BASE_URL}/predict/multiclass"
+PREDICT_BINARY_BATCH_CSV_URL     = f"{API_BASE_URL}/predict/binary/batch/csv"
+PREDICT_MULTICLASS_BATCH_CSV_URL = f"{API_BASE_URL}/predict/multiclass/batch/csv"
 
 # Timeout en secondes (10s pour API locale)
 API_TIMEOUT   = 60
