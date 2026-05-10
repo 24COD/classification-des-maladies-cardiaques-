@@ -34,7 +34,20 @@ from urllib.parse import urlparse
 import pandas as pd
 import requests
 import streamlit as st
+API_KEEP_ALIVE_URL = "https://cardiorisk-api.onrender.com/health"
 
+def _keep_alive_worker():
+    while True:
+        try:
+            requests.get(API_KEEP_ALIVE_URL, timeout=10)
+        except Exception:
+            pass
+        time.sleep(600)
+
+if "keep_alive_started" not in st.session_state:
+    thread = threading.Thread(target=_keep_alive_worker, daemon=True)
+    thread.start()
+    st.session_state["keep_alive_started"] = True
 # ---------------------------------------------------------------------------
 # 0. Configuration de la page
 # ---------------------------------------------------------------------------
