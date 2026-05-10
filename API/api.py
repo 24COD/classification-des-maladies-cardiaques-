@@ -36,7 +36,7 @@ from typing import List, Optional
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field, field_validator
 
 # ---------------------------------------------------------------------------
@@ -359,6 +359,60 @@ def predict_multiclass(patient: PatientFeatures):
 # ---------------------------------------------------------------------------
 # 6. Endpoints de prédiction — batch
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# 7. Endpoints de prédiction batch via CSV
+# ---------------------------------------------------------------------------
+
+@app.post("/predict/binary/batch/csv", response_model=BatchBinaryResponse, tags=["Prédiction (batch)"])
+async def predict_binary_batch_csv(file: UploadFile = File(...)):
+    """
+    Prédit le risque binaire pour un fichier CSV uploadé.
+    """
+    _check_models_loaded()
+    try:
+        df = pd.read_csv(file.file)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lecture CSV: {e}")
+    # Vérifier les colonnes attendues (ordre strict)
+    if list(df.columns) != FEATURES:
+        raise HTTPException(status_code=400, detail=f"Colonnes attendues: {FEATURES}")
+    proba, pred_default, pred_adjusted = _predict_binary(df)
+    results = []
+    for i in range(len(df)):
+        p = float(proba[i])
+        results.append(BinaryPrediction(
+            prediction_label    = "disease" if pred_default[i] == 1 else "healthy",
+            prediction_code     = int(pred_default[i]),
+            prediction_adjusted = int(pred_adjusted[i]),
+            probability_disease = round(p, 4),
+            threshold_default   = 0.50,
+            threshold_adjusted  = ADJUSTED_THRESHOLD,
+        ))
+    return BatchBinaryResponse(predictions=results)
+
+
+@app.post("/predict/multiclass/batch/csv", response_model=BatchMulticlassResponse, tags=["Prédiction (batch)"])
+async def predict_multiclass_batch_csv(file: UploadFile = File(...)):
+    """
+    Prédit la sévérité (multiclass) pour un fichier CSV uploadé.
+    """
+    _check_models_loaded()
+    try:
+        df = pd.read_csv(file.file)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lecture CSV: {e}")
+    if list(df.columns) != FEATURES:
+        raise HTTPException(status_code=400, detail=f"Colonnes attendues: {FEATURES}")
+    pred, proba = _predict_multiclass(df)
+    results = []
+    for i in range(len(df)):
+        results.append(MulticlassPrediction(
+            prediction_code = int(pred[i]),
+            probabilities   = [round(float(p), 4) for p in proba[i]],
+        ))
+    return BatchMulticlassResponse(predictions=results)
 
 @app.post("/predict/binary/batch", response_model=BatchBinaryResponse, tags=["Prédiction (batch)"])
 def predict_binary_batch(request: BatchRequest):
