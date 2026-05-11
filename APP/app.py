@@ -115,6 +115,11 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # 2. Configuration dynamique de l'API
 # ---------------------------------------------------------------------------
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = "binary"
+
+
+
 with st.sidebar:
     st.markdown("## 🫀 CardioRisk")
     st.markdown("**Système d'aide à la décision**")
