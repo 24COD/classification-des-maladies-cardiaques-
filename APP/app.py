@@ -126,7 +126,9 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("### 🔌 Connexion API")
-    api_url_input = st.text_input("Adresse de l'API :", value="https://cardiorisk-streamlit.onrender.com")
+    # Utiliser la variable d'environnement API_BASE_URL si elle existe, sinon utiliser l'URL par défaut
+    default_api_url = os.getenv("API_BASE_URL", "https://cardiorisk-api.onrender.com")
+    api_url_input = st.text_input("Adresse de l'API :", value=default_api_url)
     
     API_BASE_URL = api_url_input.strip().rstrip("/")
     if not API_BASE_URL.startswith(("http://", "https://")):

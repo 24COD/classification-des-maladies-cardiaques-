@@ -6,6 +6,7 @@ API FastAPI pour les deux modèles de prédiction du risque cardiaque.
 
 import json
 import io
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,7 +16,30 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field, field_validator
 
-MODELS_DIR = Path(__file__).parent.parent / "models"
+# Chemin robuste pour les modèles - fonctionne en dev et production
+def _find_models_dir() -> Path:
+    """Cherche le dossier models en montant l'arborescence."""
+    current = Path(__file__).parent.parent
+    
+    # Essayer directement d'abord
+    if (current / "models").exists():
+        return current / "models"
+    
+    # Monter un niveau (en cas de structure src/)
+    parent = current.parent
+    if (parent / "models").exists():
+        return parent / "models"
+    
+    # Vérifier la variable d'environnement
+    if "MODELS_DIR" in os.environ:
+        models_path = Path(os.environ["MODELS_DIR"])
+        if models_path.exists():
+            return models_path
+    
+    # Par défaut, retourner le chemin initial
+    return current / "models"
+
+MODELS_DIR = _find_models_dir()
 
 _DEFAULT_FEATURES = [
     "age", "sex", "cp", "trestbps", "chol", "fbs",
