@@ -1,19 +1,10 @@
 """
 api.py
 ======
-API FastAPI pour les deux modèles de prédiction du risque cardiaque (UCI Heart Disease).
-
-Endpoints disponibles :
-  GET  /                        → accueil + liste des endpoints
-  GET  /health                  → statut de l'API et des modèles
-  POST /predict/binary          → prédiction binaire (0 = sain, 1 = malade)
-  POST /predict/multiclass      → prédiction multiclasse (0 à 4)
-  POST /predict/binary/batch    → prédiction binaire sur plusieurs patients
-  POST /predict/multiclass/batch→ prédiction multiclasse sur plusieurs patients
+API FastAPI pour les deux modèles de prédiction du risque cardiaque.
 """
 
 import json
-import pickle
 import io
 from pathlib import Path
 from typing import List, Optional
@@ -24,9 +15,6 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field, field_validator
 
-# ---------------------------------------------------------------------------
-# 0. Chargement des modèles et métadonnées au démarrage
-# ---------------------------------------------------------------------------
 MODELS_DIR = Path(__file__).parent.parent / "models"
 
 _DEFAULT_FEATURES = [
@@ -39,13 +27,6 @@ def _load_joblib(path: Path, label: str):
         raise RuntimeError(f"{label} introuvable à '{path}'.")
     return joblib.load(path)
 
-def _load_pickle(path: Path, label: str):
-    if not path.exists():
-        raise RuntimeError(f"{label} introuvable à '{path}'.")
-    with open(path, "rb") as fh:
-        return pickle.load(fh)
-
-
 pipeline_binary = None
 pipeline_multiclass = None
 METADATA = None
@@ -54,18 +35,12 @@ FEATURES = _DEFAULT_FEATURES
 _startup_error: Optional[str] = None
 
 try:
-    # ── Modèle binaire ────────────────────────────────────────────────
-    try:
-        pipeline_binary = _load_pickle(MODELS_DIR / "MEILLEUR_MODELE_BINAIRE.pkl", "Meilleur modèle binaire")
-        print("Modele binaire charge (notebook/pkl)")
-    except Exception as _pkl_err:
-        print(f"Echec PKL ({_pkl_err}), tentative JOBLIB...")
-        pipeline_binary = _load_joblib(MODELS_DIR / "model_binary.joblib", "Modèle binaire (joblib)")
-        print("Modele binaire charge (joblib)")
+    # ── Chargement Exclusif des modèles JOBLIB ───────────────────────────
+    pipeline_binary = _load_joblib(MODELS_DIR / "model_binary.joblib", "Modèle binaire")
+    print("✅ Modèle binaire chargé avec succès")
 
-    # ── Modèle multiclasse ────────────────────────────────────────────────
     pipeline_multiclass = _load_joblib(MODELS_DIR / "model_multiclass.joblib", "Modèle multiclasse")
-    print("Modele multiclasse charge")
+    print("✅ Modèle multiclasse chargé avec succès")
 
     # ── Métadonnées ───────────────────────────────────────────────────────
     _meta_path = MODELS_DIR / "metadata.json"
@@ -89,18 +64,14 @@ except Exception as _exc:
     _startup_error = str(_exc)
     print(f"CRITIQUE - Erreur au chargement des modeles : {_startup_error}")
 
-
 # ---------------------------------------------------------------------------
-# 1. Schémas Pydantic
+# Schémas et Endpoints (Identique à la version précédente)
 # ---------------------------------------------------------------------------
 
 class PatientFeatures(BaseModel):
-    # Champs REQUIS
-    age: float = Field(..., ge=0, le=120, description="Âge")
-    sex: float = Field(..., ge=0, le=1, description="Sexe")
-    cp:  float = Field(..., ge=0, le=4, description="Douleur thoracique")
-
-    # Champs OPTIONNELS
+    age: float = Field(..., ge=0, le=120)
+    sex: float = Field(..., ge=0, le=1)
+    cp:  float = Field(..., ge=0, le=4)
     trestbps: Optional[float] = Field(None, ge=0)
     chol:     Optional[float] = Field(None, ge=0)
     fbs:      Optional[float] = Field(None, ge=0, le=1)
@@ -115,16 +86,11 @@ class PatientFeatures(BaseModel):
     @field_validator("trestbps", "chol", "fbs", "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal", mode="before")
     @classmethod
     def nan_to_none(cls, v):
-        if isinstance(v, float) and np.isnan(v):
-            return None
+        if isinstance(v, float) and np.isnan(v): return None
         return v
 
 class BatchRequest(BaseModel):
     patients: List[PatientFeatures] = Field(..., min_length=1)
-
-# ---------------------------------------------------------------------------
-# 2. Réponses
-# ---------------------------------------------------------------------------
 
 class BinaryPrediction(BaseModel):
     prediction_label:    str
@@ -144,22 +110,14 @@ class BatchBinaryResponse(BaseModel):
 class BatchMulticlassResponse(BaseModel):
     predictions: List[MulticlassPrediction]
 
-# ---------------------------------------------------------------------------
-# 3. Helpers (SÉCURISÉS POUR L'IA)
-# ---------------------------------------------------------------------------
-
 def _check_models_loaded():
     if pipeline_binary is None or pipeline_multiclass is None:
         raise HTTPException(status_code=503, detail=f"Modèles non chargés : {_startup_error}")
 
 def _patients_to_df(patients: List[PatientFeatures]) -> pd.DataFrame:
-    """Convertit les requêtes JSON en DataFrame propre pour Scikit-Learn."""
     rows = [p.model_dump() for p in patients]
     df = pd.DataFrame(rows, columns=FEATURES)
-    
-    # SECURITÉ : Assure que les "None" envoyés en JSON redeviennent des "NaN" (pour l'imputer de l'IA)
     df.fillna(value=np.nan, inplace=True)
-    # SECURITÉ : Force le format mathématique pour éviter les crashs de type "object"
     df = df.astype(float)
     return df
 
@@ -175,25 +133,16 @@ def _predict_multiclass(df: pd.DataFrame):
     proba = pipeline_multiclass.predict_proba(df)
     return pred, proba
 
-# ---------------------------------------------------------------------------
-# 4. Application FastAPI
-# ---------------------------------------------------------------------------
-
-app = FastAPI(title="CardioRisk API", version="1.1.0")
+app = FastAPI(title="CardioRisk API")
 
 @app.get("/", tags=["Info"])
 def root():
-    return {"message": "CardioRisk API en ligne", "version": "1.1.0"}
+    return {"message": "API en ligne"}
 
 @app.get("/health", tags=["Info"])
 def health():
-    if pipeline_binary is None or pipeline_multiclass is None:
-        raise HTTPException(status_code=503, detail=f"Modèles non chargés : {_startup_error}")
-    return {"status": "ok", "adjusted_threshold": ADJUSTED_THRESHOLD}
-
-# ---------------------------------------------------------------------------
-# 5. Endpoints Individuels
-# ---------------------------------------------------------------------------
+    _check_models_loaded()
+    return {"status": "ok"}
 
 @app.post("/predict/binary", response_model=BinaryPrediction, tags=["Prédiction"])
 def predict_binary(patient: PatientFeatures):
@@ -218,100 +167,31 @@ def predict_multiclass(patient: PatientFeatures):
         probabilities   = [round(float(p), 4) for p in proba[0]],
     )
 
-# ---------------------------------------------------------------------------
-# 6. Endpoints Batch (Prédiction en masse)
-# ---------------------------------------------------------------------------
-
-@app.post("/predict/binary/batch", response_model=BatchBinaryResponse, tags=["Prédiction (batch)"])
+@app.post("/predict/binary/batch", response_model=BatchBinaryResponse, tags=["Prédiction"])
 def predict_binary_batch(request: BatchRequest):
     _check_models_loaded()
     df = _patients_to_df(request.patients)
     proba, pred_default, pred_adjusted = _predict_binary(df)
-
-    results = []
-    for i in range(len(request.patients)):
-        results.append(BinaryPrediction(
+    results = [
+        BinaryPrediction(
             prediction_label    = "disease" if pred_default[i] == 1 else "healthy",
             prediction_code     = int(pred_default[i]),
             prediction_adjusted = int(pred_adjusted[i]),
             probability_disease = round(float(proba[i]), 4),
             threshold_adjusted  = ADJUSTED_THRESHOLD,
-        ))
-    return BatchBinaryResponse(predictions=results)
-
-@app.post("/predict/multiclass/batch", response_model=BatchMulticlassResponse, tags=["Prédiction (batch)"])
-def predict_multiclass_batch(request: BatchRequest):
-    _check_models_loaded()
-    df = _patients_to_df(request.patients)
-    pred, proba = _predict_multiclass(df)
-
-    results = []
-    for i in range(len(request.patients)):
-        results.append(MulticlassPrediction(
-            prediction_code = int(pred[i]),
-            probabilities   = [round(float(p), 4) for p in proba[i]],
-        ))
-    return BatchMulticlassResponse(predictions=results)
-
-# ---------------------------------------------------------------------------
-# 7. Endpoints CSV (Présents par sécurité, même si non utilisés par la nouvelle UI)
-# ---------------------------------------------------------------------------
-
-@app.post("/predict/binary/batch/csv", response_model=BatchBinaryResponse, tags=["Prédiction (batch)"])
-async def predict_binary_batch_csv(file: UploadFile = File(...)):
-    _check_models_loaded()
-    try:
-        content = await file.read()
-        csv_text = content.decode("utf-8-sig")
-        detected_sep = ";" if ";" in csv_text.splitlines()[0] else ","
-        df = pd.read_csv(io.StringIO(csv_text), sep=detected_sep)
-        df.columns = df.columns.str.strip()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur de lecture : {e}")
-
-    missing = [c for c in FEATURES if c not in df.columns]
-    if missing: raise HTTPException(status_code=400, detail=f"Colonnes manquantes : {missing}")
-
-    df = df[FEATURES]
-    df.fillna(value=np.nan, inplace=True)
-    df = df.astype(float)
-    
-    proba, pred_default, pred_adjusted = _predict_binary(df)
-    results = [
-        BinaryPrediction(
-            prediction_label="disease" if pred_default[i] == 1 else "healthy",
-            prediction_code=int(pred_default[i]),
-            prediction_adjusted=int(pred_adjusted[i]),
-            probability_disease=round(float(proba[i]), 4),
-            threshold_adjusted=ADJUSTED_THRESHOLD,
         ) for i in range(len(df))
     ]
     return BatchBinaryResponse(predictions=results)
 
-@app.post("/predict/multiclass/batch/csv", response_model=BatchMulticlassResponse, tags=["Prédiction (batch)"])
-async def predict_multiclass_batch_csv(file: UploadFile = File(...)):
+@app.post("/predict/multiclass/batch", response_model=BatchMulticlassResponse, tags=["Prédiction"])
+def predict_multiclass_batch(request: BatchRequest):
     _check_models_loaded()
-    try:
-        content = await file.read()
-        csv_text = content.decode("utf-8-sig")
-        detected_sep = ";" if ";" in csv_text.splitlines()[0] else ","
-        df = pd.read_csv(io.StringIO(csv_text), sep=detected_sep)
-        df.columns = df.columns.str.strip()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur de lecture : {e}")
-
-    missing = [c for c in FEATURES if c not in df.columns]
-    if missing: raise HTTPException(status_code=400, detail=f"Colonnes manquantes : {missing}")
-
-    df = df[FEATURES]
-    df.fillna(value=np.nan, inplace=True)
-    df = df.astype(float)
-
+    df = _patients_to_df(request.patients)
     pred, proba = _predict_multiclass(df)
     results = [
         MulticlassPrediction(
-            prediction_code=int(pred[i]),
-            probabilities=[round(float(p), 4) for p in proba[i]],
+            prediction_code = int(pred[i]),
+            probabilities   = [round(float(p), 4) for p in proba[i]],
         ) for i in range(len(df))
     ]
     return BatchMulticlassResponse(predictions=results)
