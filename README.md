@@ -2,7 +2,7 @@
 
 **Système intelligent de classification et prédiction des maladies cardiaques**
 
-Projet complet de Machine Learning pour l'analyse et la prédiction du risque cardiaque basé sur le dataset UCI Heart Disease. Le projet inclut une API FastAPI performante et une interface web Streamlit conviviale.
+Projet complet et détail de Machine Learning pour l'analyse et la prédiction du risque cardiaque basé sur le dataset UCI Heart Disease. Le projet inclut une API FastAPI performante et une interface web Streamlit conviviale.
 
 ---
 
